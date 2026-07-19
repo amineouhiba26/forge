@@ -1,0 +1,57 @@
+// Sprint 0 skeleton: Tenant + User only.
+// Contract/Client/Milestone land in Sprint 2, Invoice/Payment in Sprint 3.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated"
+  // Prisma 7's generator defaults to ESM, which emits `import.meta.url` and
+  // makes Node treat the compiled file as an ES module. Nest's DI and
+  // decorator metadata need CommonJS, so pin the format here.
+  moduleFormat = "cjs"
+  runtime      = "nodejs"
+}
+
+// Prisma 7 no longer accepts `url` here. The connection string is supplied at
+// runtime through the pg driver adapter (see prisma.service.ts) and to the CLI
+// through prisma.config.ts — one less place for a secret to sit in source.
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+model Tenant {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  // Drives tax calculation in the Sprint 3 CreateInvoiceCommand.
+  country   String   @db.Char(2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users User[]
+
+  @@map("tenants")
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  email        String
+  passwordHash String   @map("password_hash")
+  role         UserRole @default(MEMBER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Email is unique *per tenant*, not globally: the same person may hold an
+  // account in two tenants. A global unique here would leak tenant membership
+  // via signup errors.
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@map("users")
+}
