@@ -9,6 +9,19 @@
 
 export const TENANTS_PATTERNS = {
   PING: 'tenants.health.ping',
+
+  /** Creates a Tenant plus its first User (the owner). */
+  SIGNUP: 'tenants.auth.signup',
+  /** Exchanges credentials for an access/refresh token pair. */
+  LOGIN: 'tenants.auth.login',
+  /** Rotates a refresh token, returning a fresh pair. */
+  REFRESH: 'tenants.auth.refresh',
+  /** Revokes the presented refresh token. */
+  LOGOUT: 'tenants.auth.logout',
+  /** Reads a user within the caller's tenant. */
+  GET_USER: 'tenants.users.get',
+  /** Lists users within the caller's tenant. */
+  LIST_USERS: 'tenants.users.list',
 } as const;
 
 export const CONTRACTS_PATTERNS = {

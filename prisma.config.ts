@@ -16,6 +16,8 @@ export default defineConfig({
     path: 'libs/prisma/prisma/migrations',
   },
   datasource: {
-    url: process.env.DATABASE_URL,
+    // Migrations need DDL rights and must not be subject to RLS, so they use
+    // the owner connection — not the restricted role the services run as.
+    url: process.env.DATABASE_MIGRATION_URL ?? process.env.DATABASE_URL,
   },
 });
