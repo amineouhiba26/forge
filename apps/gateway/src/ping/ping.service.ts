@@ -17,7 +17,7 @@ import {
   CONTRACTS_CLIENT,
   TENANTS_CLIENT,
   WORKER_CLIENT,
-} from '../clients/clients.module';
+} from '../rpc/rpc-clients.module';
 
 /** Sprint 0 proof-of-life: gateway sends a ping, each service answers pong. */
 const RPC_TIMEOUT_MS = 5000;

@@ -4,6 +4,10 @@ import { ConfigModule } from '@nestjs/config';
 import { contractsServiceEnvSchema } from '@forge/contracts';
 import { PrismaModule } from '@forge/prisma';
 
+import { ClientsController } from './clients/clients.controller';
+import { ClientsService } from './clients/clients.service';
+import { ContractsController } from './contracts/contracts.controller';
+import { ContractsService } from './contracts/contracts.service';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -16,6 +20,7 @@ import { HealthController } from './health.controller';
     }),
     PrismaModule,
   ],
-  controllers: [HealthController],
+  controllers: [HealthController, ClientsController, ContractsController],
+  providers: [ClientsService, ContractsService],
 })
 export class AppModule {}

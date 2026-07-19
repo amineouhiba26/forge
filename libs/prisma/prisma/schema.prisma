@@ -1,5 +1,5 @@
-// Sprint 1: Tenant, User, RefreshToken.
-// Contract/Client/Milestone land in Sprint 2, Invoice/Payment in Sprint 3.
+// Sprint 2: Tenant, User, RefreshToken, Client, Contract, Milestone.
+// Invoice/Payment land in Sprint 3.
 
 generator client {
   provider = "prisma-client"
@@ -32,7 +32,9 @@ model Tenant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users User[]
+  users     User[]
+  clients   Client[]
+  contracts Contract[]
 
   @@map("tenants")
 }
@@ -87,4 +89,103 @@ model RefreshToken {
   @@index([tenantId])
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+enum ContractStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum MilestoneStatus {
+  PENDING
+  COMPLETE
+}
+
+/// A person or company the tenant does work for.
+model Client {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  name         String
+  email        String
+  companyName  String? @map("company_name")
+
+  /// Archived rather than deleted: a client referenced by a contract — and,
+  /// from Sprint 3, by issued invoices — is part of the tenant's financial
+  /// record. Deleting it would orphan documents that must stay reproducible.
+  archivedAt DateTime? @map("archived_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contracts Contract[]
+
+  // Scoped to the tenant, not global: two tenants may legitimately work for
+  // the same client company.
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([tenantId, archivedAt])
+  @@map("clients")
+}
+
+model Contract {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  clientId String @map("client_id") @db.Uuid
+
+  title       String
+  description String?
+  status      ContractStatus @default(DRAFT)
+
+  /// ISO 4217. Stored per contract because a freelancer may bill clients in
+  /// different currencies, and the rate is fixed when the contract is agreed.
+  currency String @default("EUR") @db.Char(3)
+
+  startDate DateTime? @map("start_date") @db.Date
+  endDate   DateTime? @map("end_date") @db.Date
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client     Client      @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  milestones Milestone[]
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([clientId])
+  @@map("contracts")
+}
+
+/// A deliverable within a contract. Sprint 3 turns a completed milestone into
+/// an invoice, which is why `amount` lives here rather than on the contract.
+model Milestone {
+  id         String @id @default(uuid()) @db.Uuid
+  tenantId   String @map("tenant_id") @db.Uuid
+  contractId String @map("contract_id") @db.Uuid
+
+  title String
+
+  /// Decimal, never Float. Binary floating point cannot represent 0.1
+  /// exactly, and rounding drift in money is a real defect — 12,2 gives exact
+  /// arithmetic up to 9,999,999,999.99.
+  amount Decimal @db.Decimal(12, 2)
+
+  dueDate DateTime        @map("due_date") @db.Date
+  status  MilestoneStatus @default(PENDING)
+
+  completedAt DateTime? @map("completed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([contractId])
+  @@index([contractId, status])
+  @@map("milestones")
 }

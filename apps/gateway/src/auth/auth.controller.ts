@@ -17,7 +17,7 @@ import {
   TENANTS_PATTERNS,
 } from '@forge/contracts';
 
-import { TENANTS_CLIENT } from '../clients/clients.module';
+import { TENANTS_CLIENT } from '../rpc/rpc-clients.module';
 import { CorrelationId } from '../common/correlation-id.decorator';
 import { rpc } from '../common/rpc';
 import { Public } from './public.decorator';

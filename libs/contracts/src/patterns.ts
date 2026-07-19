@@ -26,6 +26,20 @@ export const TENANTS_PATTERNS = {
 
 export const CONTRACTS_PATTERNS = {
   PING: 'contracts.health.ping',
+
+  CREATE_CLIENT: 'contracts.clients.create',
+  LIST_CLIENTS: 'contracts.clients.list',
+  GET_CLIENT: 'contracts.clients.get',
+  UPDATE_CLIENT: 'contracts.clients.update',
+  ARCHIVE_CLIENT: 'contracts.clients.archive',
+
+  CREATE_CONTRACT: 'contracts.contracts.create',
+  LIST_CONTRACTS: 'contracts.contracts.list',
+  GET_CONTRACT: 'contracts.contracts.get',
+  UPDATE_CONTRACT: 'contracts.contracts.update',
+
+  LIST_MILESTONES: 'contracts.milestones.list',
+  COMPLETE_MILESTONE: 'contracts.milestones.complete',
 } as const;
 
 export const BILLING_PATTERNS = {

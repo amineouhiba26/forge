@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 
-import { RpcClientsModule } from '../clients/clients.module';
+import { RpcClientsModule } from '../rpc/rpc-clients.module';
 import { PingController } from './ping.controller';
 import { PingService } from './ping.service';
 

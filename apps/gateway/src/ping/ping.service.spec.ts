@@ -6,7 +6,7 @@ import {
   CONTRACTS_CLIENT,
   TENANTS_CLIENT,
   WORKER_CLIENT,
-} from '../clients/clients.module';
+} from '../rpc/rpc-clients.module';
 import { PingService } from './ping.service';
 
 /**

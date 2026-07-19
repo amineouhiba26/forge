@@ -2,10 +2,10 @@ import { Module } from '@nestjs/common';
 
 import { AuthModule } from '../auth/auth.module';
 import { RpcClientsModule } from '../rpc/rpc-clients.module';
-import { ClientsController } from './clients.controller';
+import { ContractsController } from './contracts.controller';
 
 @Module({
   imports: [RpcClientsModule, AuthModule],
-  controllers: [ClientsController],
+  controllers: [ContractsController],
 })
-export class ClientsModule {}
+export class ContractsModule {}

@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PassportModule } from '@nestjs/passport';
 
-import { RpcClientsModule } from '../clients/clients.module';
+import { RpcClientsModule } from '../rpc/rpc-clients.module';
 import { AuthController } from './auth.controller';
 import { AbilityFactory } from './casl/ability.factory';
 import { JwtCaslGuard } from './jwt-casl.guard';
