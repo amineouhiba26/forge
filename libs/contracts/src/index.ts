@@ -4,3 +4,4 @@ export * from './patterns';
 export * from './events';
 export * from './dto/message-envelope.dto';
 export * from './dto/ping.dto';
+export * from './dto/auth.dto';

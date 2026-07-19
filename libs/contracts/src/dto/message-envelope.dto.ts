@@ -18,3 +18,17 @@ export abstract class MessageEnvelopeDto {
   @IsString()
   tenantId?: string;
 }
+
+/**
+ * Wraps a client-supplied DTO with the metadata the gateway adds on the way in.
+ *
+ * The distinction matters: a request DTO describes what a *client* may send and
+ * is validated against untrusted input, while this describes what a downstream
+ * service *receives*. Making the HTTP DTOs extend the envelope directly would
+ * force callers to supply a `correlationId` the gateway is supposed to
+ * generate — and, worse, let a client pick its own `tenantId`.
+ */
+export type Enveloped<T> = T & {
+  correlationId: string;
+  tenantId?: string;
+};

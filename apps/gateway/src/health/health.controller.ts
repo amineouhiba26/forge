@@ -8,6 +8,8 @@ import {
 
 import { buildRedisTransportOptions } from '@forge/contracts';
 
+import { Public } from '../auth/public.decorator';
+
 @Controller('health')
 export class HealthController {
   constructor(
@@ -15,6 +17,9 @@ export class HealthController {
     private readonly microservice: MicroserviceHealthIndicator,
   ) {}
 
+  // Public: a health check that requires a token is useless to a load
+  // balancer or an uptime probe, neither of which can hold credentials.
+  @Public()
   @Get()
   @HealthCheck()
   check(): Promise<HealthCheckResult> {
