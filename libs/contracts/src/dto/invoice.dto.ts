@@ -48,7 +48,11 @@ export interface InvoiceDto {
   currency: string;
   status: InvoiceStatusDto;
   pdfUrl: string | null;
+  /** Why PDF generation failed, if it did. */
   failureReason: string | null;
+  /** Why the most recent payment attempt failed, if one did. */
+  lastPaymentError: string | null;
+  stripePaymentIntentId: string | null;
   generationAttempts: number;
   issuedAt: string | null;
   paidAt: string | null;
@@ -97,3 +101,42 @@ export type GetInvoiceRpcRequest = Enveloped<{ invoiceId: string }> & {
 export type ListInvoicesRpcRequest = Enveloped<ListInvoicesQueryDto> & {
   tenantId: string;
 };
+
+/** Mirrors `PaymentStatus` in the Prisma schema. */
+export enum PaymentStatusDto {
+  PENDING = 'PENDING',
+  SUCCEEDED = 'SUCCEEDED',
+  FAILED = 'FAILED',
+}
+
+export interface PaymentIntentDto {
+  paymentIntentId: string;
+  /** Handed to Stripe.js in the browser to complete the payment. */
+  clientSecret: string | null;
+  amountInCents: number;
+  currency: string;
+}
+
+export type CreatePaymentIntentRpcRequest = Enveloped<{ invoiceId: string }> & {
+  tenantId: string;
+};
+
+/**
+ * What the gateway forwards for a Stripe webhook.
+ *
+ * `rawBody` is the exact string Stripe sent. It must not be parsed and
+ * re-serialised anywhere along the way: the signature is computed over those
+ * precise bytes, and a round trip through JSON.parse/stringify can reorder
+ * keys or reformat numbers, which makes a genuine event fail verification.
+ */
+export interface StripeWebhookRpcRequest {
+  correlationId: string;
+  rawBody: string;
+  signature: string;
+}
+
+export interface StripeWebhookResult {
+  received: true;
+  /** False when the event had already been applied — a replay. */
+  processed: boolean;
+}

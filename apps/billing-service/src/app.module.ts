@@ -18,6 +18,10 @@ import {
   ListInvoicesHandler,
 } from './invoices/queries/invoice.query-handlers';
 import { InvoiceSaga } from './invoices/sagas/invoice.saga';
+import { CreatePaymentIntentHandler } from './payments/create-payment-intent.handler';
+import { PaymentsController } from './payments/payments.controller';
+import { ProcessStripeWebhookHandler } from './payments/process-webhook.handler';
+import { StripeService } from './stripe/stripe.service';
 import { RpcClientsModule } from './rpc/rpc-clients.module';
 import { TaxService } from './tax/tax.service';
 
@@ -26,6 +30,8 @@ const CommandHandlers = [
   MarkInvoiceIssuedHandler,
   MarkGenerationFailedHandler,
   RetryPdfGenerationHandler,
+  CreatePaymentIntentHandler,
+  ProcessStripeWebhookHandler,
 ];
 
 const QueryHandlers = [GetInvoiceHandler, ListInvoicesHandler];
@@ -44,9 +50,10 @@ const QueryHandlers = [GetInvoiceHandler, ListInvoicesHandler];
     // decorated with @CommandHandler, @QueryHandler or @Saga.
     CqrsModule,
   ],
-  controllers: [HealthController, InvoicesController],
+  controllers: [HealthController, InvoicesController, PaymentsController],
   providers: [
     TaxService,
+    StripeService,
     ...CommandHandlers,
     ...QueryHandlers,
     // The saga is an ordinary provider; @Saga() is what registers its
