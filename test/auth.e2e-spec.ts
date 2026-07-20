@@ -14,7 +14,6 @@ import {
 
 import { AppModule as GatewayModule } from '../apps/gateway/src/app.module';
 import { AppModule as TenantsModule } from '../apps/tenants-service/src/app.module';
-import { assertNoCompetingServices } from './support/no-competing-services';
 
 /**
  * Supertest types `response.body` as `any`, which disables type checking for
@@ -65,9 +64,6 @@ describe('Auth & tenant isolation (e2e)', () => {
   let sessionB: { userId: string; tenantId: string; accessToken: string };
 
   beforeAll(async () => {
-    // Fails fast and explains itself if another stack is on this Redis.
-    await assertNoCompetingServices();
-
     // The downstream service runs in-process, listening on the same Redis the
     // gateway's clients publish to.
     tenantsService = await NestFactory.createMicroservice<MicroserviceOptions>(

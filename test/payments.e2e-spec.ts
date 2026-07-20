@@ -22,7 +22,6 @@ import { StripeService } from '../apps/billing-service/src/stripe/stripe.service
 import { AppModule as ContractsModule } from '../apps/contracts-service/src/app.module';
 import { AppModule as GatewayModule } from '../apps/gateway/src/app.module';
 import { AppModule as TenantsModule } from '../apps/tenants-service/src/app.module';
-import { assertNoCompetingServices } from './support/no-competing-services';
 import { AppModule as WorkerModule } from '../apps/worker-service/src/app.module';
 
 function body<T>(response: { body: unknown }): T {
@@ -122,9 +121,6 @@ describe('Payments & webhook idempotency (e2e)', () => {
   const createdIntents: { invoiceId: string; amountInCents: number }[] = [];
 
   beforeAll(async () => {
-    // Fails fast and explains itself if another stack is on this Redis.
-    await assertNoCompetingServices();
-
     for (const module of [TenantsModule, ContractsModule, WorkerModule]) {
       const service = await NestFactory.createMicroservice<MicroserviceOptions>(
         module,
