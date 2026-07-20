@@ -33,6 +33,9 @@ function server() {
   return app.getHttpServer() as Parameters<typeof request>[0];
 }
 
+/** Retries stop here; see MAX_GENERATION_ATTEMPTS in the saga. */
+const MAX_GENERATION_ATTEMPTS = 3;
+
 /** The saga is asynchronous — poll rather than guess at a sleep duration. */
 async function waitForStatus(
   invoiceId: string,
@@ -54,6 +57,50 @@ async function waitForStatus(
     if (Date.now() > deadline) {
       throw new Error(
         `Invoice ${invoiceId} never reached ${status} (last: ${invoice.status})`,
+      );
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+}
+
+/**
+ * Waits for the compensating path to run to completion.
+ *
+ * Polling for `status === GENERATION_FAILED` is not enough: the invoice enters
+ * that status after the *first* failure, while retries 2 and 3 are still in
+ * flight. Returning then means asserting against a half-finished process — and
+ * worse, the caller clears the forced-failure flag while a retry is pending,
+ * so that retry succeeds and the invoice leaves GENERATION_FAILED entirely.
+ *
+ * The terminal condition is the attempt cap, not the status.
+ */
+async function waitForRetriesExhausted(
+  invoiceId: string,
+  token: string,
+  timeoutMs = 15_000,
+): Promise<InvoiceDto> {
+  const deadline = Date.now() + timeoutMs;
+
+  for (;;) {
+    const response = await request(server())
+      .get(`/invoices/${invoiceId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    const invoice = body<InvoiceDto>(response);
+
+    if (
+      invoice.status === InvoiceStatusDto.GENERATION_FAILED &&
+      invoice.generationAttempts >= MAX_GENERATION_ATTEMPTS
+    ) {
+      return invoice;
+    }
+
+    if (Date.now() > deadline) {
+      throw new Error(
+        `Invoice ${invoiceId} did not exhaust retries ` +
+          `(status ${invoice.status}, attempts ${invoice.generationAttempts})`,
       );
     }
 
@@ -345,11 +392,9 @@ describe('Invoicing saga (e2e)', () => {
       process.env.FORCE_PDF_FAILURE = 'true';
       try {
         const invoiceId = await createInvoice(fr.token, milestoneId);
-        const invoice = await waitForStatus(
-          invoiceId,
-          fr.token,
-          InvoiceStatusDto.GENERATION_FAILED,
-        );
+        // Waits for the retry chain to finish, not merely for the first
+        // failure — the flag must stay set until the saga has given up.
+        const invoice = await waitForRetriesExhausted(invoiceId, fr.token);
 
         // The invoice was NOT rolled back. It is a financial record from the
         // moment it exists; compensation moves it to a recoverable state
@@ -374,11 +419,10 @@ describe('Invoicing saga (e2e)', () => {
       let invoiceId: string;
       try {
         invoiceId = await createInvoice(fr.token, milestoneId);
-        await waitForStatus(
-          invoiceId,
-          fr.token,
-          InvoiceStatusDto.GENERATION_FAILED,
-        );
+        // Same reason as above: the flag must stay set until the saga has
+        // exhausted its retries, or a pending retry succeeds after it is
+        // cleared and the invoice never settles in GENERATION_FAILED.
+        await waitForRetriesExhausted(invoiceId, fr.token);
       } finally {
         delete process.env.FORCE_PDF_FAILURE;
       }
