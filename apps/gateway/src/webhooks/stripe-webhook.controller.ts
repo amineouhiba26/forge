@@ -17,7 +17,7 @@ import type { StripeWebhookResult } from '@forge/contracts';
 
 import { Public } from '../auth/public.decorator';
 import { CorrelationId } from '../common/correlation-id.decorator';
-import { rpc } from '../common/rpc';
+import { RpcService } from '../common/rpc.service';
 import { BILLING_CLIENT } from '../rpc/rpc-clients.module';
 
 /**
@@ -40,7 +40,10 @@ import { BILLING_CLIENT } from '../rpc/rpc-clients.module';
  */
 @Controller('webhooks')
 export class StripeWebhookController {
-  constructor(@Inject(BILLING_CLIENT) private readonly billing: ClientProxy) {}
+  constructor(
+    @Inject(BILLING_CLIENT) private readonly billing: ClientProxy,
+    private readonly rpc: RpcService,
+  ) {}
 
   /**
    * Public by necessity: Stripe cannot present a JWT. The signature check in
@@ -72,7 +75,8 @@ export class StripeWebhookController {
       );
     }
 
-    return rpc(
+    return this.rpc.send(
+      'billing-service',
       this.billing.send(BILLING_PATTERNS.HANDLE_STRIPE_WEBHOOK, {
         rawBody: rawBody.toString('utf8'),
         signature,

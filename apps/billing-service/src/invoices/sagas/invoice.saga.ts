@@ -4,7 +4,12 @@ import { ICommand, Saga, ofType } from '@nestjs/cqrs';
 import { Queue } from 'bullmq';
 import { EMPTY, Observable, mergeMap } from 'rxjs';
 
-import { JOBS, JOB_RETRY_POLICY, QUEUES } from '@forge/contracts';
+import {
+  JOBS,
+  JOB_RETRY_POLICY,
+  QUEUES,
+  withTraceCarrier,
+} from '@forge/contracts';
 import type {
   GenerateInvoicePdfJobData,
   SendInvoiceEmailJobData,
@@ -57,15 +62,21 @@ export class InvoiceSaga {
           correlationId: event.correlationId,
         };
 
-        await this.pdfQueue.add(JOBS.GENERATE_INVOICE_PDF, data, {
-          ...JOB_RETRY_POLICY,
-          // Deterministic id, so a re-published event cannot enqueue a second
-          // render — BullMQ rejects a duplicate id while it still knows the job.
-          //
-          // Hyphen, not colon: BullMQ uses `:` as its own Redis key separator
-          // and rejects custom ids containing one ("Custom Id cannot contain :").
-          jobId: `pdf-${event.invoiceId}`,
-        });
+        // The carrier travels with the job so the worker's spans join this
+        // trace rather than starting their own.
+        await this.pdfQueue.add(
+          JOBS.GENERATE_INVOICE_PDF,
+          withTraceCarrier(data),
+          {
+            ...JOB_RETRY_POLICY,
+            // Deterministic id, so a re-published event cannot enqueue a second
+            // render — BullMQ rejects a duplicate id while it still knows the job.
+            //
+            // Hyphen, not colon: BullMQ uses `:` as its own Redis key separator
+            // and rejects custom ids containing one ("Custom Id cannot contain :").
+            jobId: `pdf-${event.invoiceId}`,
+          },
+        );
 
         this.logger.log(
           `Queued PDF generation for invoice ${event.invoiceId} ` +
@@ -121,10 +132,14 @@ export class InvoiceSaga {
           currency: invoice.currency,
         };
 
-        await this.emailQueue.add(JOBS.SEND_INVOICE_EMAIL, data, {
-          ...JOB_RETRY_POLICY,
-          jobId: `email-${event.invoiceId}`,
-        });
+        await this.emailQueue.add(
+          JOBS.SEND_INVOICE_EMAIL,
+          withTraceCarrier(data),
+          {
+            ...JOB_RETRY_POLICY,
+            jobId: `email-${event.invoiceId}`,
+          },
+        );
 
         this.logger.log(
           `Queued invoice email for ${event.invoiceId} to ${client.email} ` +

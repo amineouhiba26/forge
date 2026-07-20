@@ -33,6 +33,18 @@ const baseSchema = {
   NODE_ENV: Joi.string()
     .valid('development', 'test', 'production')
     .default('development'),
+
+  // Observability, shared by all five services so the log shape and trace
+  // configuration cannot drift between them.
+  LOG_LEVEL: Joi.string()
+    .valid('fatal', 'error', 'warn', 'info', 'debug', 'trace')
+    .default('info'),
+  // Defaults to off. A collector that is not running makes every service
+  // retry exports on a timer, which is worse than no tracing at all.
+  OTEL_ENABLED: Joi.boolean().default(false),
+  OTEL_EXPORTER_OTLP_ENDPOINT: Joi.string()
+    .uri()
+    .default('http://localhost:4318'),
 };
 
 /** Any app that speaks the Redis microservice transport. */

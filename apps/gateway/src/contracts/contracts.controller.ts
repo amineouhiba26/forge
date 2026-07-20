@@ -27,13 +27,14 @@ import type {
 import { RequirePermission } from '../auth/casl/require-permission.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { CorrelationId } from '../common/correlation-id.decorator';
-import { rpc } from '../common/rpc';
+import { RpcService } from '../common/rpc.service';
 import { CONTRACTS_CLIENT } from '../rpc/rpc-clients.module';
 
 @Controller('contracts')
 export class ContractsController {
   constructor(
     @Inject(CONTRACTS_CLIENT) private readonly contracts: ClientProxy,
+    private readonly rpc: RpcService,
   ) {}
 
   @Post()
@@ -43,7 +44,8 @@ export class ContractsController {
     @CurrentUser() user: AuthenticatedUser,
     @CorrelationId() correlationId: string,
   ): Promise<ContractDto> {
-    return rpc(
+    return this.rpc.send(
+      'contracts-service',
       this.contracts.send(CONTRACTS_PATTERNS.CREATE_CONTRACT, {
         ...body,
         tenantId: user.tenantId,
@@ -59,7 +61,8 @@ export class ContractsController {
     @CurrentUser() user: AuthenticatedUser,
     @CorrelationId() correlationId: string,
   ): Promise<PaginatedResult<ContractDto>> {
-    return rpc(
+    return this.rpc.send(
+      'contracts-service',
       this.contracts.send(CONTRACTS_PATTERNS.LIST_CONTRACTS, {
         ...query,
         tenantId: user.tenantId,
@@ -75,7 +78,8 @@ export class ContractsController {
     @CurrentUser() user: AuthenticatedUser,
     @CorrelationId() correlationId: string,
   ): Promise<ContractDto> {
-    return rpc(
+    return this.rpc.send(
+      'contracts-service',
       this.contracts.send(CONTRACTS_PATTERNS.GET_CONTRACT, {
         contractId: id,
         tenantId: user.tenantId,
@@ -92,7 +96,8 @@ export class ContractsController {
     @CurrentUser() user: AuthenticatedUser,
     @CorrelationId() correlationId: string,
   ): Promise<ContractDto> {
-    return rpc(
+    return this.rpc.send(
+      'contracts-service',
       this.contracts.send(CONTRACTS_PATTERNS.UPDATE_CONTRACT, {
         ...body,
         contractId: id,
@@ -109,7 +114,8 @@ export class ContractsController {
     @CurrentUser() user: AuthenticatedUser,
     @CorrelationId() correlationId: string,
   ): Promise<MilestoneDto[]> {
-    return rpc(
+    return this.rpc.send(
+      'contracts-service',
       this.contracts.send(CONTRACTS_PATTERNS.LIST_MILESTONES, {
         contractId: id,
         tenantId: user.tenantId,
@@ -132,7 +138,8 @@ export class ContractsController {
     @CurrentUser() user: AuthenticatedUser,
     @CorrelationId() correlationId: string,
   ): Promise<MilestoneDto> {
-    return rpc(
+    return this.rpc.send(
+      'contracts-service',
       this.contracts.send(CONTRACTS_PATTERNS.COMPLETE_MILESTONE, {
         contractId: id,
         milestoneId,

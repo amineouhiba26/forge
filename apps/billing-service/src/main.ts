@@ -4,22 +4,35 @@
 // the environment is already populated.
 import 'dotenv/config';
 
+// Tracing starts before any other import. OpenTelemetry patches modules as
+// they load, so anything already required is never instrumented and silently
+// produces no spans.
+import { startTracing } from '@forge/observability';
+
+const tracing = startTracing('billing-service');
+
 import { NestFactory } from '@nestjs/core';
 import { MicroserviceOptions } from '@nestjs/microservices';
-import { Logger } from '@nestjs/common';
 
 import { buildRedisTransportOptions } from '@forge/contracts';
+
+import { Logger } from 'nestjs-pino';
 
 import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.createMicroservice<MicroserviceOptions>(
     AppModule,
-    buildRedisTransportOptions(),
+    { ...buildRedisTransportOptions(), bufferLogs: true },
   );
 
+  app.useLogger(app.get(Logger));
   await app.listen();
-  Logger.log('billing-service listening on Redis transport', 'Bootstrap');
+  app.get(Logger).log('billing-service listening on Redis transport');
+
+  const stop = () => void tracing.shutdown().then(() => process.exit(0));
+  process.on('SIGTERM', stop);
+  process.on('SIGINT', stop);
 }
 
 void bootstrap();

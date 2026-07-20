@@ -10,6 +10,7 @@ import type {
 } from '@forge/contracts';
 
 import { DeadLetterService } from '../queue/dead-letter.service';
+import { runInJobContext } from '../queue/job-context';
 import { JobIdempotencyService } from '../queue/job-idempotency.service';
 import { BILLING_CLIENT } from '../rpc/rpc-clients.module';
 import { MailService } from './mail.service';
@@ -37,7 +38,14 @@ export class EmailProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: Job<SendInvoiceEmailJobData>): Promise<{ sent: boolean }> {
+  /** See PdfProcessor.process — same reason, same wrapper. */
+  process(job: Job<SendInvoiceEmailJobData>): Promise<{ sent: boolean }> {
+    return runInJobContext(job.data, () => this.handle(job));
+  }
+
+  private async handle(
+    job: Job<SendInvoiceEmailJobData>,
+  ): Promise<{ sent: boolean }> {
     const { invoiceId, tenantId, correlationId, recipientEmail } = job.data;
     const jobKey = emailJobKey(invoiceId);
 

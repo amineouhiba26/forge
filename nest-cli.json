@@ -15,7 +15,9 @@
       "root": "apps/gateway",
       "entryFile": "main",
       "sourceRoot": "apps/gateway/src",
-      "compilerOptions": { "tsConfigPath": "apps/gateway/tsconfig.app.json" }
+      "compilerOptions": {
+        "tsConfigPath": "apps/gateway/tsconfig.app.json"
+      }
     },
     "tenants-service": {
       "type": "application",
@@ -58,14 +60,27 @@
       "root": "libs/contracts",
       "entryFile": "index",
       "sourceRoot": "libs/contracts/src",
-      "compilerOptions": { "tsConfigPath": "libs/contracts/tsconfig.lib.json" }
+      "compilerOptions": {
+        "tsConfigPath": "libs/contracts/tsconfig.lib.json"
+      }
     },
     "prisma": {
       "type": "library",
       "root": "libs/prisma",
       "entryFile": "index",
       "sourceRoot": "libs/prisma/src",
-      "compilerOptions": { "tsConfigPath": "libs/prisma/tsconfig.lib.json" }
+      "compilerOptions": {
+        "tsConfigPath": "libs/prisma/tsconfig.lib.json"
+      }
+    },
+    "observability": {
+      "type": "library",
+      "root": "libs/observability",
+      "entryFile": "index",
+      "sourceRoot": "libs/observability/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/observability/tsconfig.lib.json"
+      }
     }
   }
 }

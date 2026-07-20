@@ -19,7 +19,7 @@ import {
 
 import { TENANTS_CLIENT } from '../rpc/rpc-clients.module';
 import { CorrelationId } from '../common/correlation-id.decorator';
-import { rpc } from '../common/rpc';
+import { RpcService } from '../common/rpc.service';
 import { Public } from './public.decorator';
 
 /**
@@ -28,7 +28,10 @@ import { Public } from './public.decorator';
  */
 @Controller('auth')
 export class AuthController {
-  constructor(@Inject(TENANTS_CLIENT) private readonly tenants: ClientProxy) {}
+  constructor(
+    @Inject(TENANTS_CLIENT) private readonly tenants: ClientProxy,
+    private readonly rpc: RpcService,
+  ) {}
 
   @Public()
   @Post('signup')
@@ -36,7 +39,8 @@ export class AuthController {
     @Body() body: SignupRequestDto,
     @CorrelationId() correlationId: string,
   ): Promise<AuthResultDto> {
-    return rpc(
+    return this.rpc.send(
+      'tenants-service',
       this.tenants.send(TENANTS_PATTERNS.SIGNUP, { ...body, correlationId }),
     );
   }
@@ -49,7 +53,8 @@ export class AuthController {
     @Body() body: LoginRequestDto,
     @CorrelationId() correlationId: string,
   ): Promise<AuthResultDto> {
-    return rpc(
+    return this.rpc.send(
+      'tenants-service',
       this.tenants.send(TENANTS_PATTERNS.LOGIN, { ...body, correlationId }),
     );
   }
@@ -61,7 +66,8 @@ export class AuthController {
     @Body() body: RefreshRequestDto,
     @CorrelationId() correlationId: string,
   ): Promise<AuthResultDto> {
-    return rpc(
+    return this.rpc.send(
+      'tenants-service',
       this.tenants.send(TENANTS_PATTERNS.REFRESH, { ...body, correlationId }),
     );
   }
@@ -73,7 +79,8 @@ export class AuthController {
     @Body() body: LogoutRequestDto,
     @CorrelationId() correlationId: string,
   ): Promise<{ success: true }> {
-    return rpc(
+    return this.rpc.send(
+      'tenants-service',
       this.tenants.send(TENANTS_PATTERNS.LOGOUT, { ...body, correlationId }),
     );
   }

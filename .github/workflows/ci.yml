@@ -67,6 +67,11 @@ jobs:
       SMTP_HOST: localhost
       SMTP_PORT: 1025
       MAIL_FROM: billing@forge.local
+      # Observability. Tracing is deliberately OFF in CI: no collector runs
+      # there, and an exporter retrying against a dead endpoint would add
+      # noise and latency to every test without observing anything.
+      LOG_LEVEL: warn
+      OTEL_ENABLED: 'false'
 
     steps:
       - uses: actions/checkout@v5
