@@ -1,5 +1,4 @@
-// Sprint 2: Tenant, User, RefreshToken, Client, Contract, Milestone.
-// Invoice/Payment land in Sprint 3.
+// Sprint 4: adds ProcessedWebhook and the Stripe fields on Invoice/Payment.
 
 generator client {
   provider = "prisma-client"
@@ -237,6 +236,15 @@ model Invoice {
   /// Set when the worker reports a successful PDF render.
   pdfUrl String? @map("pdf_url")
 
+  /// The Stripe PaymentIntent this invoice is collected through. Unique so a
+  /// second intent cannot be silently attached to the same invoice.
+  stripePaymentIntentId String? @unique @map("stripe_payment_intent_id")
+
+  /// Recorded when a payment attempt fails. The invoice stays PENDING/ISSUED —
+  /// a failed attempt is not a state of the invoice, it is a fact about one
+  /// attempt — but the reason has to be visible to whoever chases it.
+  lastPaymentError String? @map("last_payment_error")
+
   /// Why generation failed, so a retry is diagnosable rather than mysterious.
   failureReason String? @map("failure_reason")
   /// Bounded so a permanently failing invoice cannot retry forever.
@@ -283,4 +291,34 @@ model Payment {
   @@index([tenantId])
   @@index([invoiceId])
   @@map("payments")
+}
+
+/// Every Stripe webhook event this system has already acted on.
+///
+/// The entire idempotency guarantee rests on the unique constraint here, and
+/// on the row being inserted **in the same transaction** as the state change it
+/// authorises. Checking "have I seen this?" and then acting is two statements,
+/// and two concurrent deliveries of the same event both read "no" before
+/// either writes.
+///
+/// Deliberately *not* tenant-scoped, and deliberately without RLS: Stripe event
+/// IDs are unique per account, not per tenant. A per-tenant unique index would
+/// let one event be processed once under each tenant, which is the exact double
+/// application this table exists to prevent.
+model ProcessedWebhook {
+  id String @id @default(uuid()) @db.Uuid
+
+  /// Stripe's own event ID (`evt_...`).
+  eventId String @unique @map("event_id")
+  /// e.g. `payment_intent.succeeded`. Stored for diagnostics only.
+  eventType String @map("event_type")
+
+  /// Recorded where known, so a replay can be traced to a tenant. Never used
+  /// for filtering — see the note above about global uniqueness.
+  tenantId String? @map("tenant_id") @db.Uuid
+
+  processedAt DateTime @default(now()) @map("processed_at")
+
+  @@index([eventType])
+  @@map("processed_webhooks")
 }

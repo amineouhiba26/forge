@@ -83,6 +83,8 @@ interface InvoiceRow {
   status: string;
   pdfUrl: string | null;
   failureReason: string | null;
+  lastPaymentError: string | null;
+  stripePaymentIntentId: string | null;
   generationAttempts: number;
   issuedAt: Date | null;
   paidAt: Date | null;
@@ -107,6 +109,10 @@ export function toInvoiceDto(invoice: InvoiceRow): InvoiceDto {
     status: invoice.status as InvoiceStatusDto,
     pdfUrl: invoice.pdfUrl,
     failureReason: invoice.failureReason,
+    // Surfaced deliberately: a payment failure that is recorded but invisible
+    // to the API is a reason nobody can act on.
+    lastPaymentError: invoice.lastPaymentError,
+    stripePaymentIntentId: invoice.stripePaymentIntentId,
     generationAttempts: invoice.generationAttempts,
     issuedAt: invoice.issuedAt?.toISOString() ?? null,
     paidAt: invoice.paidAt?.toISOString() ?? null,

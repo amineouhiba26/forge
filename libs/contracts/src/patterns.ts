@@ -58,6 +58,15 @@ export const BILLING_PATTERNS = {
   CREATE_INVOICE: 'billing.invoices.create',
   GET_INVOICE: 'billing.invoices.get',
   LIST_INVOICES: 'billing.invoices.list',
+
+  /** Creates a Stripe PaymentIntent for an issued invoice. */
+  CREATE_PAYMENT_INTENT: 'billing.payments.createIntent',
+  /**
+   * Handles a raw Stripe webhook. The gateway forwards the untouched body and
+   * signature header; billing-service verifies and interprets them, so no
+   * Stripe secret has to live outside the service that owns payments.
+   */
+  HANDLE_STRIPE_WEBHOOK: 'billing.payments.handleWebhook',
 } as const;
 
 export const WORKER_PATTERNS = {

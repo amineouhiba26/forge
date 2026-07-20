@@ -11,7 +11,12 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule);
+  // `rawBody: true` keeps the untouched request bytes on `req.rawBody`
+  // alongside the parsed body. The Stripe webhook needs them: the signature is
+  // computed over exactly what was sent, and parse-then-re-serialise does not
+  // reliably reproduce it (key order, whitespace, number formatting). Without
+  // this, a genuine webhook fails verification.
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   app.useGlobalPipes(
     new ValidationPipe({

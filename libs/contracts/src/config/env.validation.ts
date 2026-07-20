@@ -102,10 +102,39 @@ export const contractsServiceEnvSchema = Joi.object({
   ...databaseSchema,
 });
 
+/**
+ * Stripe credentials, required only by billing-service.
+ *
+ * Note what the gateway does NOT get: neither of these. The gateway receives
+ * the webhook because it is the only HTTP ingress, but it forwards the raw
+ * body untouched and never interprets it — so no Stripe secret needs to leave
+ * the service that owns payments.
+ */
+const stripeSchema = {
+  STRIPE_SECRET_KEY: Joi.string()
+    .pattern(/^sk_(test|live)_/)
+    .required()
+    .messages({
+      'string.pattern.base':
+        'STRIPE_SECRET_KEY must start with sk_test_ or sk_live_.',
+    }),
+  /**
+   * The signing secret for the webhook endpoint. Separate from the API key and
+   * not interchangeable: this one only ever verifies inbound signatures.
+   */
+  STRIPE_WEBHOOK_SECRET: Joi.string()
+    .pattern(/^whsec_/)
+    .required()
+    .messages({
+      'string.pattern.base': 'STRIPE_WEBHOOK_SECRET must start with whsec_.',
+    }),
+};
+
 export const billingServiceEnvSchema = Joi.object({
   ...baseSchema,
   ...redisTransportSchema,
   ...databaseSchema,
+  ...stripeSchema,
 });
 
 export const workerServiceEnvSchema = Joi.object({

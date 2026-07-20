@@ -54,6 +54,11 @@ jobs:
       JWT_REFRESH_SECRET: ci-refresh-secret-at-least-32-characters-long
       JWT_ACCESS_TTL: 15m
       JWT_REFRESH_TTL: 7d
+      # CI-only placeholders. No Stripe account is contacted: the e2e suite
+      # stubs intent creation and signs its own webhook payloads with the
+      # secret below, so verification is exercised for real against it.
+      STRIPE_SECRET_KEY: sk_test_ci_placeholder_not_a_real_key
+      STRIPE_WEBHOOK_SECRET: whsec_ci_placeholder_not_a_real_secret
 
     steps:
       - uses: actions/checkout@v5

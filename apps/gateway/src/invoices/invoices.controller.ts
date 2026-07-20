@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Inject,
   Param,
   ParseUUIDPipe,
@@ -19,6 +21,7 @@ import type {
   AuthenticatedUser,
   InvoiceDto,
   PaginatedResult,
+  PaymentIntentDto,
 } from '@forge/contracts';
 
 import { RequirePermission } from '../auth/casl/require-permission.decorator';
@@ -48,6 +51,29 @@ export class InvoicesController {
     return rpc(
       this.billing.send(BILLING_PATTERNS.CREATE_INVOICE, {
         ...body,
+        tenantId: user.tenantId,
+        correlationId,
+      }),
+    );
+  }
+
+  /**
+   * Starts collection for an issued invoice.
+   *
+   * `issue Invoice` rather than `read`: asking a client for money is the same
+   * privilege as billing them in the first place.
+   */
+  @Post(':id/payment-intent')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermission('issue', 'Invoice')
+  createPaymentIntent(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @CorrelationId() correlationId: string,
+  ): Promise<PaymentIntentDto> {
+    return rpc(
+      this.billing.send(BILLING_PATTERNS.CREATE_PAYMENT_INTENT, {
+        invoiceId: id,
         tenantId: user.tenantId,
         correlationId,
       }),

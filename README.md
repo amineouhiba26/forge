@@ -109,6 +109,29 @@ times before parking it for inspection.
 One invoice per milestone is enforced by a unique constraint rather than an
 application check: two concurrent requests would both pass a check-then-act.
 
+## Payments
+
+| Route | Auth | Purpose |
+| --- | --- | --- |
+| `POST /invoices/:id/payment-intent` | admin/owner | Start collection for an issued invoice |
+| `POST /webhooks/stripe` | public, signature-verified | Stripe event delivery |
+
+Requires `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` in billing-service's
+environment. For local development, `stripe listen --forward-to
+localhost:3000/webhooks/stripe` prints a signing secret and forwards real
+test-mode events.
+
+The webhook endpoint is public because Stripe cannot present a token — the
+signature check is what authenticates it, so the raw request body is preserved
+and verified before anything else happens.
+
+Webhook handling is idempotent. Each Stripe event ID is recorded in
+`processed_webhooks` under a unique constraint, in the same transaction as the
+state change it authorises, so a redelivered or concurrent duplicate is a no-op.
+`PAID` is terminal: a `payment_failed` arriving after a `payment_succeeded` —
+which Stripe does not order — is logged and ignored rather than un-paying the
+invoice.
+
 Tenant isolation is enforced by Postgres Row-Level Security, not by application
 filtering. The services connect as an unprivileged role that is subject to those
 policies; migrations use a separate owner connection.
