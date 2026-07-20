@@ -6,6 +6,7 @@ import {
   MessageEnvelopeDto,
   TENANTS_PATTERNS,
 } from '@forge/contracts';
+import type { TenantDto } from '@forge/contracts';
 
 import { UsersService } from './users.service';
 
@@ -25,6 +26,11 @@ interface GetUserRequest extends ScopedRequest {
 @Controller()
 export class UsersController {
   constructor(private readonly users: UsersService) {}
+
+  @MessagePattern(TENANTS_PATTERNS.GET_TENANT)
+  getTenant(@Payload() payload: ScopedRequest): Promise<TenantDto> {
+    return this.users.getTenant(payload.tenantId);
+  }
 
   @MessagePattern(TENANTS_PATTERNS.LIST_USERS)
   list(@Payload() payload: ScopedRequest): Promise<AuthUserDto[]> {

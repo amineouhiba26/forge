@@ -189,3 +189,98 @@ model Milestone {
   @@index([contractId, status])
   @@map("milestones")
 }
+
+enum InvoiceStatus {
+  /// Created, PDF not yet produced. The state every invoice starts in.
+  PENDING
+  /// PDF generated successfully; the invoice can be sent and paid.
+  ISSUED
+  /// The saga's compensating state — PDF generation failed and a retry is queued.
+  GENERATION_FAILED
+  /// Sprint 4: a Stripe payment succeeded against this invoice.
+  PAID
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+model Invoice {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  contractId  String @map("contract_id") @db.Uuid
+  clientId    String @map("client_id") @db.Uuid
+
+  /// One invoice per milestone, enforced by the database rather than by a
+  /// check in the command handler. Two concurrent CreateInvoiceCommands for
+  /// the same milestone would both pass an application-level "already
+  /// invoiced?" read; only a unique constraint actually prevents the double.
+  milestoneId String @unique @map("milestone_id") @db.Uuid
+
+  /// The milestone amount at the time of invoicing. Copied rather than joined:
+  /// an invoice is a financial document and must stay reproducible even if the
+  /// milestone is later edited.
+  subtotal Decimal @db.Decimal(12, 2)
+
+  /// Rate as a percentage (20.00 = 20%), resolved from the tenant's country.
+  taxRate   Decimal @map("tax_rate") @db.Decimal(5, 2)
+  taxAmount Decimal @map("tax_amount") @db.Decimal(12, 2)
+  total     Decimal @db.Decimal(12, 2)
+
+  currency String @db.Char(3)
+
+  status InvoiceStatus @default(PENDING)
+
+  /// Set when the worker reports a successful PDF render.
+  pdfUrl String? @map("pdf_url")
+
+  /// Why generation failed, so a retry is diagnosable rather than mysterious.
+  failureReason String? @map("failure_reason")
+  /// Bounded so a permanently failing invoice cannot retry forever.
+  generationAttempts Int @default(0) @map("generation_attempts")
+
+  issuedAt DateTime? @map("issued_at")
+  paidAt   DateTime? @map("paid_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  payments Payment[]
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([contractId])
+  @@map("invoices")
+}
+
+/// Sprint 4 populates this from Stripe webhooks. Created now because the
+/// backlog asks for both models in one migration, and because the invoice
+/// relation is easier to add up front than to bolt on later.
+model Payment {
+  id        String @id @default(uuid()) @db.Uuid
+  tenantId  String @map("tenant_id") @db.Uuid
+  invoiceId String @map("invoice_id") @db.Uuid
+
+  provider          String @default("stripe")
+  /// The provider's own ID, unique so a replayed webhook cannot create a
+  /// second Payment row for the same real-world payment.
+  providerPaymentId String @unique @map("provider_payment_id")
+
+  amount   Decimal @db.Decimal(12, 2)
+  currency String  @db.Char(3)
+
+  status        PaymentStatus @default(PENDING)
+  failureReason String?       @map("failure_reason")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([invoiceId])
+  @@map("payments")
+}

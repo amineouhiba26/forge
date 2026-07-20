@@ -10,6 +10,7 @@ import { ClientsModule } from './clients/clients.module';
 import { CorrelationIdMiddleware } from './common/correlation-id.middleware';
 import { ContractsModule } from './contracts/contracts.module';
 import { HealthModule } from './health/health.module';
+import { InvoicesModule } from './invoices/invoices.module';
 import { PingModule } from './ping/ping.module';
 import { UsersModule } from './users/users.module';
 
@@ -24,6 +25,7 @@ import { UsersModule } from './users/users.module';
     ClientsModule,
     ContractsModule,
     HealthModule,
+    InvoicesModule,
     PingModule,
     UsersModule,
   ],
