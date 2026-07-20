@@ -13,6 +13,7 @@ import { PrismaService } from '@forge/prisma';
 
 import { BILLING_CLIENT } from '../rpc/rpc-clients.module';
 import { DeadLetterService } from '../queue/dead-letter.service';
+import { runInJobContext } from '../queue/job-context';
 import { PdfRendererService } from './pdf-renderer.service';
 
 @Processor(QUEUES.PDF)
@@ -28,7 +29,15 @@ export class PdfProcessor extends WorkerHost {
     super();
   }
 
-  async process(
+  /**
+   * Rebinds the producer's trace and correlation context, then does the work.
+   * Every log line and span underneath belongs to the request that queued it.
+   */
+  process(job: Job<GenerateInvoicePdfJobData>): Promise<{ pdfPath: string }> {
+    return runInJobContext(job.data, () => this.handle(job));
+  }
+
+  private async handle(
     job: Job<GenerateInvoicePdfJobData>,
   ): Promise<{ pdfPath: string }> {
     const { invoiceId, tenantId, correlationId } = job.data;

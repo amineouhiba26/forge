@@ -25,12 +25,13 @@ import { RequirePermission } from '../auth/casl/require-permission.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { CONTRACTS_CLIENT } from '../rpc/rpc-clients.module';
 import { CorrelationId } from '../common/correlation-id.decorator';
-import { rpc } from '../common/rpc';
+import { RpcService } from '../common/rpc.service';
 
 @Controller('clients')
 export class ClientsController {
   constructor(
     @Inject(CONTRACTS_CLIENT) private readonly contracts: ClientProxy,
+    private readonly rpc: RpcService,
   ) {}
 
   @Post()
@@ -40,7 +41,8 @@ export class ClientsController {
     @CurrentUser() user: AuthenticatedUser,
     @CorrelationId() correlationId: string,
   ): Promise<ClientDto> {
-    return rpc(
+    return this.rpc.send(
+      'contracts-service',
       this.contracts.send(CONTRACTS_PATTERNS.CREATE_CLIENT, {
         ...body,
         // From verified JWT claims, never the request body.
@@ -57,7 +59,8 @@ export class ClientsController {
     @CurrentUser() user: AuthenticatedUser,
     @CorrelationId() correlationId: string,
   ): Promise<PaginatedResult<ClientDto>> {
-    return rpc(
+    return this.rpc.send(
+      'contracts-service',
       this.contracts.send(CONTRACTS_PATTERNS.LIST_CLIENTS, {
         ...query,
         tenantId: user.tenantId,
@@ -73,7 +76,8 @@ export class ClientsController {
     @CurrentUser() user: AuthenticatedUser,
     @CorrelationId() correlationId: string,
   ): Promise<ClientDto> {
-    return rpc(
+    return this.rpc.send(
+      'contracts-service',
       this.contracts.send(CONTRACTS_PATTERNS.GET_CLIENT, {
         clientId: id,
         tenantId: user.tenantId,
@@ -90,7 +94,8 @@ export class ClientsController {
     @CurrentUser() user: AuthenticatedUser,
     @CorrelationId() correlationId: string,
   ): Promise<ClientDto> {
-    return rpc(
+    return this.rpc.send(
+      'contracts-service',
       this.contracts.send(CONTRACTS_PATTERNS.UPDATE_CLIENT, {
         ...body,
         clientId: id,
@@ -112,7 +117,8 @@ export class ClientsController {
     @CurrentUser() user: AuthenticatedUser,
     @CorrelationId() correlationId: string,
   ): Promise<ClientDto> {
-    return rpc(
+    return this.rpc.send(
+      'contracts-service',
       this.contracts.send(CONTRACTS_PATTERNS.ARCHIVE_CLIENT, {
         clientId: id,
         tenantId: user.tenantId,

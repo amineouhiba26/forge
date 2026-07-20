@@ -11,11 +11,14 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { RequirePermission } from '../auth/casl/require-permission.decorator';
 import { TENANTS_CLIENT } from '../rpc/rpc-clients.module';
 import { CorrelationId } from '../common/correlation-id.decorator';
-import { rpc } from '../common/rpc';
+import { RpcService } from '../common/rpc.service';
 
 @Controller('users')
 export class UsersController {
-  constructor(@Inject(TENANTS_CLIENT) private readonly tenants: ClientProxy) {}
+  constructor(
+    @Inject(TENANTS_CLIENT) private readonly tenants: ClientProxy,
+    private readonly rpc: RpcService,
+  ) {}
 
   @Get()
   @RequirePermission('read', 'User')
@@ -23,7 +26,8 @@ export class UsersController {
     @CurrentUser() user: AuthenticatedUser,
     @CorrelationId() correlationId: string,
   ): Promise<AuthUserDto[]> {
-    return rpc(
+    return this.rpc.send(
+      'tenants-service',
       this.tenants.send(TENANTS_PATTERNS.LIST_USERS, {
         // Taken from verified JWT claims, never from the request. A client
         // cannot ask for another tenant's users by editing a payload — and
@@ -41,7 +45,8 @@ export class UsersController {
     @CurrentUser() user: AuthenticatedUser,
     @CorrelationId() correlationId: string,
   ): Promise<AuthUserDto> {
-    return rpc(
+    return this.rpc.send(
+      'tenants-service',
       this.tenants.send(TENANTS_PATTERNS.GET_USER, {
         tenantId: user.tenantId,
         userId: id,

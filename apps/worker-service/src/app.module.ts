@@ -1,8 +1,14 @@
 import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { LoggerModule } from 'nestjs-pino';
 
 import { QUEUES, workerServiceEnvSchema } from '@forge/contracts';
+import {
+  RpcCorrelationInterceptor,
+  buildLoggerConfig,
+} from '@forge/observability';
 import { PrismaModule } from '@forge/prisma';
 
 import { EmailProcessor } from './email/email.processor';
@@ -21,6 +27,7 @@ import { RpcClientsModule } from './rpc/rpc-clients.module';
       validationSchema: workerServiceEnvSchema,
       validationOptions: { abortEarly: false },
     }),
+    LoggerModule.forRoot(buildLoggerConfig('worker-service')),
     // The worker owns tables as of Sprint 5 — processed_jobs and
     // dead_letter_jobs. This reverses the Sprint 0 note that it never would:
     // queue state that has to survive a Redis flush needs somewhere durable.
@@ -39,6 +46,12 @@ import { RpcClientsModule } from './rpc/rpc-clients.module';
   ],
   controllers: [HealthController],
   providers: [
+    {
+      // Async context does not survive Redis, so the correlation ID arrives in
+      // the message payload and is rebound here for the handler's logs.
+      provide: APP_INTERCEPTOR,
+      useClass: RpcCorrelationInterceptor,
+    },
     PdfRendererService,
     MailService,
     DeadLetterService,

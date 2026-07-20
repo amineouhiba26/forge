@@ -9,6 +9,15 @@
 
 export const TENANTS_PATTERNS = {
   PING: 'tenants.health.ping',
+  /**
+   * Runs the service's own Terminus checks and reports them.
+   *
+   * A microservice has no HTTP surface, so it cannot expose `/health` for a
+   * probe to scrape. It reports over the transport instead, and the gateway
+   * aggregates — which also means a service that cannot answer *is* the
+   * signal, with no separate liveness endpoint to keep in sync.
+   */
+  HEALTH: 'tenants.health.check',
 
   /** Creates a Tenant plus its first User (the owner). */
   SIGNUP: 'tenants.auth.signup',
@@ -28,6 +37,15 @@ export const TENANTS_PATTERNS = {
 
 export const CONTRACTS_PATTERNS = {
   PING: 'contracts.health.ping',
+  /**
+   * Runs the service's own Terminus checks and reports them.
+   *
+   * A microservice has no HTTP surface, so it cannot expose `/health` for a
+   * probe to scrape. It reports over the transport instead, and the gateway
+   * aggregates — which also means a service that cannot answer *is* the
+   * signal, with no separate liveness endpoint to keep in sync.
+   */
+  HEALTH: 'contracts.health.check',
 
   CREATE_CLIENT: 'contracts.clients.create',
   LIST_CLIENTS: 'contracts.clients.list',
@@ -53,6 +71,15 @@ export const CONTRACTS_PATTERNS = {
 
 export const BILLING_PATTERNS = {
   PING: 'billing.health.ping',
+  /**
+   * Runs the service's own Terminus checks and reports them.
+   *
+   * A microservice has no HTTP surface, so it cannot expose `/health` for a
+   * probe to scrape. It reports over the transport instead, and the gateway
+   * aggregates — which also means a service that cannot answer *is* the
+   * signal, with no separate liveness endpoint to keep in sync.
+   */
+  HEALTH: 'billing.health.check',
 
   /** Dispatches CreateInvoiceCommand. */
   CREATE_INVOICE: 'billing.invoices.create',
@@ -71,6 +98,15 @@ export const BILLING_PATTERNS = {
 
 export const WORKER_PATTERNS = {
   PING: 'worker.health.ping',
+  /**
+   * Runs the service's own Terminus checks and reports them.
+   *
+   * A microservice has no HTTP surface, so it cannot expose `/health` for a
+   * probe to scrape. It reports over the transport instead, and the gateway
+   * aggregates — which also means a service that cannot answer *is* the
+   * signal, with no separate liveness endpoint to keep in sync.
+   */
+  HEALTH: 'worker.health.check',
   // Sprint 3's synchronous `worker.pdf.generateInvoice` is gone. PDF work is
   // a durable BullMQ job as of Sprint 5 — see `queues.ts`. The pattern was
   // removed rather than left in place, because a dead message pattern reads

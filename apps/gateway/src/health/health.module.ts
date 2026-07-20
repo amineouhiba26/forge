@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
-import { TerminusModule } from '@nestjs/terminus';
 
+import { RpcClientsModule } from '../rpc/rpc-clients.module';
 import { HealthController } from './health.controller';
 
 @Module({
-  imports: [TerminusModule],
+  imports: [RpcClientsModule],
   controllers: [HealthController],
 })
 export class HealthModule {}

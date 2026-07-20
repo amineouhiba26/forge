@@ -1,5 +1,6 @@
 export * from './config/env.validation';
 export * from './config/redis-transport';
+export * from './config/trace-propagation';
 export * from './patterns';
 export * from './queues';
 export * from './events';
@@ -10,3 +11,4 @@ export * from './dto/pagination.dto';
 export * from './dto/client.dto';
 export * from './dto/contract.dto';
 export * from './dto/invoice.dto';
+export * from './dto/health.dto';

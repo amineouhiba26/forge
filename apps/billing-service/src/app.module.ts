@@ -1,9 +1,15 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { LoggerModule } from 'nestjs-pino';
 import { CqrsModule } from '@nestjs/cqrs';
 
 import { QUEUES, billingServiceEnvSchema } from '@forge/contracts';
+import {
+  RpcCorrelationInterceptor,
+  buildLoggerConfig,
+} from '@forge/observability';
 import { PrismaModule } from '@forge/prisma';
 
 import { HealthController } from './health.controller';
@@ -44,6 +50,7 @@ const QueryHandlers = [GetInvoiceHandler, ListInvoicesHandler];
       // Surface every bad var at once instead of one per restart cycle.
       validationOptions: { abortEarly: false },
     }),
+    LoggerModule.forRoot(buildLoggerConfig('billing-service')),
     PrismaModule,
     RpcClientsModule,
     // Billing is the queue *producer*; worker-service is the consumer. Both
@@ -70,6 +77,12 @@ const QueryHandlers = [GetInvoiceHandler, ListInvoicesHandler];
     WorkerEventsController,
   ],
   providers: [
+    {
+      // Async context does not survive Redis, so the correlation ID arrives in
+      // the message payload and is rebound here for the handler's logs.
+      provide: APP_INTERCEPTOR,
+      useClass: RpcCorrelationInterceptor,
+    },
     TaxService,
     StripeService,
     ...CommandHandlers,

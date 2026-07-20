@@ -74,6 +74,19 @@ export class StripeService {
   }
 
   /**
+   * Confirms Stripe is reachable and the API key is accepted.
+   *
+   * `balance.retrieve` is the cheapest authenticated call available — it
+   * touches no resource this system owns and creates nothing, so a health
+   * probe running every few seconds cannot cause side effects. An unauthenticated
+   * ping would prove only that Stripe is up, not that *this* service can talk
+   * to it, which is the question being asked.
+   */
+  async checkReachable(): Promise<void> {
+    await this.stripe.balance.retrieve();
+  }
+
+  /**
    * Verifies a webhook signature and parses the event.
    *
    * Takes the **raw body**, not a parsed object. The signature is computed over

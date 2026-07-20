@@ -4,9 +4,18 @@
 // the environment is already populated.
 import 'dotenv/config';
 
-import { Logger, ValidationPipe } from '@nestjs/common';
+// Tracing starts before any other import. OpenTelemetry patches modules as
+// they load, so anything already required is never instrumented and silently
+// produces no spans.
+import { startTracing } from '@forge/observability';
+
+const tracing = startTracing('gateway');
+
+import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+
+import { Logger } from 'nestjs-pino';
 
 import { AppModule } from './app.module';
 
@@ -16,7 +25,14 @@ async function bootstrap(): Promise<void> {
   // computed over exactly what was sent, and parse-then-re-serialise does not
   // reliably reproduce it (key order, whitespace, number formatting). Without
   // this, a genuine webhook fails verification.
-  const app = await NestFactory.create(AppModule, { rawBody: true });
+  const app = await NestFactory.create(AppModule, {
+    rawBody: true,
+    // Nest's own logger is buffered until pino takes over, so startup lines
+    // are not lost and are not written in a second format.
+    bufferLogs: true,
+  });
+
+  app.useLogger(app.get(Logger));
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -30,7 +46,13 @@ async function bootstrap(): Promise<void> {
 
   const port = app.get(ConfigService).getOrThrow<number>('PORT');
   await app.listen(port);
-  Logger.log(`gateway listening on http://localhost:${port}`, 'Bootstrap');
+  app.get(Logger).log(`gateway listening on http://localhost:${port}`);
+
+  // Flush pending spans on shutdown, or the last seconds of traces before
+  // every deploy are lost.
+  const stop = () => void tracing.shutdown().then(() => process.exit(0));
+  process.on('SIGTERM', stop);
+  process.on('SIGINT', stop);
 }
 
 void bootstrap();

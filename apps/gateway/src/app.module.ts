@@ -1,13 +1,18 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { LoggerModule } from 'nestjs-pino';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 
 import { gatewayEnvSchema } from '@forge/contracts';
+import {
+  CorrelationIdMiddleware,
+  buildLoggerConfig,
+} from '@forge/observability';
 
+import { RpcInfrastructureModule } from './common/rpc.module';
 import { AuthModule } from './auth/auth.module';
 import { JwtCaslGuard } from './auth/jwt-casl.guard';
 import { ClientsModule } from './clients/clients.module';
-import { CorrelationIdMiddleware } from './common/correlation-id.middleware';
 import { RequestLoggingInterceptor } from './common/request-logging.interceptor';
 import { ContractsModule } from './contracts/contracts.module';
 import { HealthModule } from './health/health.module';
@@ -23,6 +28,8 @@ import { WebhooksModule } from './webhooks/webhooks.module';
       validationSchema: gatewayEnvSchema,
       validationOptions: { abortEarly: false },
     }),
+    LoggerModule.forRoot(buildLoggerConfig('gateway')),
+    RpcInfrastructureModule,
     AuthModule,
     ClientsModule,
     ContractsModule,

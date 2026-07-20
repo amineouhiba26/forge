@@ -26,6 +26,8 @@
     "paths": {
       "@forge/contracts": ["./libs/contracts/src"],
       "@forge/contracts/*": ["./libs/contracts/src/*"],
+      "@forge/observability": ["./libs/observability/src"],
+      "@forge/observability/*": ["./libs/observability/src/*"],
       "@forge/prisma": ["./libs/prisma/src"],
       "@forge/prisma/*": ["./libs/prisma/src/*"]
     }

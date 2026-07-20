@@ -165,6 +165,38 @@ grep <correlation-id> *.log   # gateway → billing → worker, including retrie
 Local mail is caught by Mailpit at http://localhost:8025 — nothing leaves the
 machine.
 
+## Observability
+
+Structured logs (`nestjs-pino`) with one shape across all five services, an
+OpenTelemetry trace spanning every service, and a health endpoint that
+aggregates each service's own dependency checks.
+
+```bash
+npm run health        # live combined status, refreshing
+npm run health:once   # one snapshot; exit 1 if anything is degraded
+open http://localhost:16686   # Jaeger — traces across all five services
+```
+
+Every request gets a correlation ID at the gateway. It is bound to async
+context, so every log line carries it without being passed one, and it travels
+in the payload across the Redis transport and inside queued jobs.
+
+`GET /health` reports each service's own checks — the gateway never queries
+another service's database. It answers `200` even while degraded, because that
+is the case it exists for. `GET /health/live` checks nothing else, so a failing
+dependency cannot get the container restarted.
+
+## Resilience
+
+Gateway calls to downstream services go through a per-service circuit breaker
+(`opossum`). When a service is unreachable the client gets a `503` naming it,
+not a `500`; once the circuit opens, requests fail in milliseconds rather than
+waiting out the timeout, and other services are unaffected. Recovery is
+automatic via a half-open probe.
+
+Downstream `4xx` responses never open a circuit — a service correctly rejecting
+bad input is not a failing service.
+
 ## Tests
 
 ```bash

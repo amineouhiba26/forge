@@ -27,12 +27,15 @@ import type {
 import { RequirePermission } from '../auth/casl/require-permission.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { CorrelationId } from '../common/correlation-id.decorator';
-import { rpc } from '../common/rpc';
+import { RpcService } from '../common/rpc.service';
 import { BILLING_CLIENT } from '../rpc/rpc-clients.module';
 
 @Controller('invoices')
 export class InvoicesController {
-  constructor(@Inject(BILLING_CLIENT) private readonly billing: ClientProxy) {}
+  constructor(
+    @Inject(BILLING_CLIENT) private readonly billing: ClientProxy,
+    private readonly rpc: RpcService,
+  ) {}
 
   /**
    * Requires `issue Invoice`, not `create Invoice`.
@@ -48,7 +51,8 @@ export class InvoicesController {
     @CurrentUser() user: AuthenticatedUser,
     @CorrelationId() correlationId: string,
   ): Promise<{ invoiceId: string }> {
-    return rpc(
+    return this.rpc.send(
+      'billing-service',
       this.billing.send(BILLING_PATTERNS.CREATE_INVOICE, {
         ...body,
         tenantId: user.tenantId,
@@ -71,7 +75,8 @@ export class InvoicesController {
     @CurrentUser() user: AuthenticatedUser,
     @CorrelationId() correlationId: string,
   ): Promise<PaymentIntentDto> {
-    return rpc(
+    return this.rpc.send(
+      'billing-service',
       this.billing.send(BILLING_PATTERNS.CREATE_PAYMENT_INTENT, {
         invoiceId: id,
         tenantId: user.tenantId,
@@ -87,7 +92,8 @@ export class InvoicesController {
     @CurrentUser() user: AuthenticatedUser,
     @CorrelationId() correlationId: string,
   ): Promise<PaginatedResult<InvoiceDto>> {
-    return rpc(
+    return this.rpc.send(
+      'billing-service',
       this.billing.send(BILLING_PATTERNS.LIST_INVOICES, {
         ...query,
         tenantId: user.tenantId,
@@ -103,7 +109,8 @@ export class InvoicesController {
     @CurrentUser() user: AuthenticatedUser,
     @CorrelationId() correlationId: string,
   ): Promise<InvoiceDto> {
-    return rpc(
+    return this.rpc.send(
+      'billing-service',
       this.billing.send(BILLING_PATTERNS.GET_INVOICE, {
         invoiceId: id,
         tenantId: user.tenantId,

@@ -1,6 +1,8 @@
 import { Transport } from '@nestjs/microservices';
 import type { RedisOptions } from '@nestjs/microservices';
 
+import { TracePropagatingSerializer } from './trace-propagation';
+
 /**
  * Transport options shared by every microservice and by the gateway's clients.
  *
@@ -27,6 +29,11 @@ export function buildRedisTransportOptions(): Required<
       // should wait, not die and take the compose stack down with it.
       retryAttempts: Number.POSITIVE_INFINITY,
       retryDelay: 1000,
+      // Injects W3C trace context into every outgoing message, so a trace
+      // spans services instead of stopping at each process boundary. Set here
+      // rather than per-client so it covers every message, including ones
+      // added later by someone who has not read the tracing code.
+      serializer: new TracePropagatingSerializer(),
     },
   };
 }

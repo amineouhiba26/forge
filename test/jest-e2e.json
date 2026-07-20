@@ -1,5 +1,9 @@
 {
-  "moduleFileExtensions": ["js", "json", "ts"],
+  "moduleFileExtensions": [
+    "js",
+    "json",
+    "ts"
+  ],
   "rootDir": "..",
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
@@ -9,7 +13,8 @@
   "moduleNameMapper": {
     "^@forge/contracts(|/.*)$": "<rootDir>/libs/contracts/src/$1",
     "^@forge/prisma(|/.*)$": "<rootDir>/libs/prisma/src/$1",
-    "^(\\.{1,2}/.*)\\.js$": "$1"
+    "^(\\.{1,2}/.*)\\.js$": "$1",
+    "^@forge/observability(|/.*)$": "<rootDir>/libs/observability/src/$1"
   },
   "testTimeout": 30000
 }
