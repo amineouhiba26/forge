@@ -10,9 +10,16 @@ import type {
   ListContractsRpcRequest,
   ListMilestonesRpcRequest,
   MilestoneDto,
+  MilestoneForBillingDto,
   PaginatedResult,
   UpdateContractRpcRequest,
 } from '@forge/contracts';
+
+interface GetMilestoneForBillingRequest {
+  tenantId: string;
+  milestoneId: string;
+  correlationId: string;
+}
 
 import { ContractsService } from './contracts.service';
 
@@ -47,6 +54,13 @@ export class ContractsController {
     @Payload() payload: ListMilestonesRpcRequest,
   ): Promise<MilestoneDto[]> {
     return this.contracts.listMilestones(payload.tenantId, payload.contractId);
+  }
+
+  @MessagePattern(CONTRACTS_PATTERNS.GET_MILESTONE_FOR_BILLING)
+  getForBilling(
+    @Payload() payload: GetMilestoneForBillingRequest,
+  ): Promise<MilestoneForBillingDto> {
+    return this.contracts.getForBilling(payload.tenantId, payload.milestoneId);
   }
 
   @MessagePattern(CONTRACTS_PATTERNS.COMPLETE_MILESTONE)

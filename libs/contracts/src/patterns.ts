@@ -18,6 +18,8 @@ export const TENANTS_PATTERNS = {
   REFRESH: 'tenants.auth.refresh',
   /** Revokes the presented refresh token. */
   LOGOUT: 'tenants.auth.logout',
+  /** Reads the calling tenant itself — billing needs its country for tax. */
+  GET_TENANT: 'tenants.tenants.get',
   /** Reads a user within the caller's tenant. */
   GET_USER: 'tenants.users.get',
   /** Lists users within the caller's tenant. */
@@ -40,12 +42,30 @@ export const CONTRACTS_PATTERNS = {
 
   LIST_MILESTONES: 'contracts.milestones.list',
   COMPLETE_MILESTONE: 'contracts.milestones.complete',
+  /**
+   * Reads one milestone with the context billing needs to invoice it.
+   * Billing does not query the contracts tables directly: they belong to
+   * contracts-service, and reaching across would make the schema a shared
+   * dependency that neither service could change safely.
+   */
+  GET_MILESTONE_FOR_BILLING: 'contracts.milestones.getForBilling',
 } as const;
 
 export const BILLING_PATTERNS = {
   PING: 'billing.health.ping',
+
+  /** Dispatches CreateInvoiceCommand. */
+  CREATE_INVOICE: 'billing.invoices.create',
+  GET_INVOICE: 'billing.invoices.get',
+  LIST_INVOICES: 'billing.invoices.list',
 } as const;
 
 export const WORKER_PATTERNS = {
   PING: 'worker.health.ping',
+
+  /**
+   * Renders an invoice PDF. Sprint 3 answers synchronously so the saga can
+   * observe failure and compensate; Sprint 5 replaces it with a BullMQ job.
+   */
+  GENERATE_INVOICE_PDF: 'worker.pdf.generateInvoice',
 } as const;

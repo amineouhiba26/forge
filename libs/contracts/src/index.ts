@@ -8,3 +8,4 @@ export * from './dto/auth.dto';
 export * from './dto/pagination.dto';
 export * from './dto/client.dto';
 export * from './dto/contract.dto';
+export * from './dto/invoice.dto';

@@ -87,6 +87,28 @@ can only be completed on an active contract.
 Monetary amounts are stored as `Decimal(12,2)` and serialised as strings —
 JSON numbers are IEEE 754 doubles and would reintroduce rounding error.
 
+## Billing
+
+| Route | Role | Purpose |
+| --- | --- | --- |
+| `POST /invoices` | admin/owner | Create an invoice from a completed milestone |
+| `GET /invoices` | any | List — `?page&limit&status&contractId` |
+| `GET /invoices/:id` | any | Read one |
+
+Invoicing is a CQRS saga rather than a single service method. `POST /invoices`
+dispatches a command that validates the milestone, resolves the tax rate from
+the tenant's country and writes the invoice as `PENDING`. An
+`InvoiceCreatedEvent` then drives a saga that requests PDF rendering and moves
+the invoice to `ISSUED`.
+
+If rendering fails the invoice is **not** rolled back — it is a financial record
+from the moment it exists. A compensating action moves it to
+`GENERATION_FAILED` with the reason recorded, and the saga retries up to three
+times before parking it for inspection.
+
+One invoice per milestone is enforced by a unique constraint rather than an
+application check: two concurrent requests would both pass a check-then-act.
+
 Tenant isolation is enforced by Postgres Row-Level Security, not by application
 filtering. The services connect as an unprivileged role that is subject to those
 policies; migrations use a separate owner connection.

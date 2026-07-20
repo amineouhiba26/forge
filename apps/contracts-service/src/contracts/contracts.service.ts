@@ -7,6 +7,7 @@ import {
   CreateContractRpcRequest,
   ListContractsRpcRequest,
   MilestoneDto,
+  MilestoneForBillingDto,
   MilestoneStatusDto,
   PaginatedResult,
   UpdateContractRpcRequest,
@@ -221,6 +222,41 @@ export class ContractsService {
 
       return toMilestoneDto(updated);
     });
+  }
+
+  /**
+   * The projection billing needs to invoice a milestone.
+   *
+   * A dedicated read rather than reusing `get`: billing needs the client and
+   * currency from the parent contract, and it must not depend on the shape of
+   * the full contract DTO. A narrow, named contract between the two services
+   * is what lets either change independently.
+   */
+  async getForBilling(
+    tenantId: string,
+    milestoneId: string,
+  ): Promise<MilestoneForBillingDto> {
+    const milestone = await this.prisma.forTenant(tenantId, (tx) =>
+      tx.milestone.findUnique({
+        where: { id: milestoneId },
+        include: { contract: true },
+      }),
+    );
+
+    if (!milestone) {
+      throw new RpcException({ status: 404, message: 'Milestone not found' });
+    }
+
+    return {
+      id: milestone.id,
+      contractId: milestone.contractId,
+      clientId: milestone.contract.clientId,
+      title: milestone.title,
+      amount: milestone.amount.toFixed(2),
+      currency: milestone.contract.currency,
+      status: milestone.status,
+      contractStatus: milestone.contract.status,
+    };
   }
 
   private assertTransitionAllowed(

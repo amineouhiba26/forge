@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { workerServiceEnvSchema } from '@forge/contracts';
 
 import { HealthController } from './health.controller';
+import { PdfController } from './pdf/pdf.controller';
 
 @Module({
   imports: [
@@ -16,6 +17,6 @@ import { HealthController } from './health.controller';
     // No PrismaModule: the worker owns no tables. It reacts to queue jobs and
     // reports results back over the transport — Sprint 5 builds that out.
   ],
-  controllers: [HealthController],
+  controllers: [HealthController, PdfController],
 })
 export class AppModule {}

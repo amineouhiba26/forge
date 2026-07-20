@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
 
-import { AuthUserDto, UserRoleDto } from '@forge/contracts';
+import { AuthUserDto, TenantDto, UserRoleDto } from '@forge/contracts';
 import { PrismaService } from '@forge/prisma';
 
 /**
@@ -22,6 +22,22 @@ export class UsersService {
     );
 
     return users.map(toAuthUser);
+  }
+
+  /**
+   * Reads the tenant itself. Billing calls this for the country that drives
+   * the invoice tax rate.
+   */
+  async getTenant(tenantId: string): Promise<TenantDto> {
+    const tenant = await this.prisma.forTenant(tenantId, (tx) =>
+      tx.tenant.findUnique({ where: { id: tenantId } }),
+    );
+
+    if (!tenant) {
+      throw new RpcException({ status: 404, message: 'Tenant not found' });
+    }
+
+    return { id: tenant.id, name: tenant.name, country: tenant.country };
   }
 
   async get(tenantId: string, userId: string): Promise<AuthUserDto> {
