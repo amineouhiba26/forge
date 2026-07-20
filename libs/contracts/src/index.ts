@@ -1,6 +1,7 @@
 export * from './config/env.validation';
 export * from './config/redis-transport';
 export * from './patterns';
+export * from './queues';
 export * from './events';
 export * from './dto/message-envelope.dto';
 export * from './dto/ping.dto';

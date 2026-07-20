@@ -33,9 +33,6 @@ function server() {
   return app.getHttpServer() as Parameters<typeof request>[0];
 }
 
-/** Retries stop here; see MAX_GENERATION_ATTEMPTS in the saga. */
-const MAX_GENERATION_ATTEMPTS = 3;
-
 /** The saga is asynchronous — poll rather than guess at a sleep duration. */
 async function waitForStatus(
   invoiceId: string,
@@ -57,50 +54,6 @@ async function waitForStatus(
     if (Date.now() > deadline) {
       throw new Error(
         `Invoice ${invoiceId} never reached ${status} (last: ${invoice.status})`,
-      );
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-}
-
-/**
- * Waits for the compensating path to run to completion.
- *
- * Polling for `status === GENERATION_FAILED` is not enough: the invoice enters
- * that status after the *first* failure, while retries 2 and 3 are still in
- * flight. Returning then means asserting against a half-finished process — and
- * worse, the caller clears the forced-failure flag while a retry is pending,
- * so that retry succeeds and the invoice leaves GENERATION_FAILED entirely.
- *
- * The terminal condition is the attempt cap, not the status.
- */
-async function waitForRetriesExhausted(
-  invoiceId: string,
-  token: string,
-  timeoutMs = 15_000,
-): Promise<InvoiceDto> {
-  const deadline = Date.now() + timeoutMs;
-
-  for (;;) {
-    const response = await request(server())
-      .get(`/invoices/${invoiceId}`)
-      .set('Authorization', `Bearer ${token}`)
-      .expect(200);
-
-    const invoice = body<InvoiceDto>(response);
-
-    if (
-      invoice.status === InvoiceStatusDto.GENERATION_FAILED &&
-      invoice.generationAttempts >= MAX_GENERATION_ATTEMPTS
-    ) {
-      return invoice;
-    }
-
-    if (Date.now() > deadline) {
-      throw new Error(
-        `Invoice ${invoiceId} did not exhaust retries ` +
-          `(status ${invoice.status}, attempts ${invoice.generationAttempts})`,
       );
     }
 
@@ -168,7 +121,6 @@ describe('Invoicing saga (e2e)', () => {
   });
 
   afterAll(async () => {
-    delete process.env.FORCE_PDF_FAILURE;
     await app?.close();
     for (const service of services) await service.close();
   });
@@ -383,59 +335,10 @@ describe('Invoicing saga (e2e)', () => {
     });
   });
 
-  describe('the compensating path', () => {
-    it('parks the invoice in GENERATION_FAILED when the PDF cannot be made', async () => {
-      const milestoneId = await completedMilestone(fr.token, frClientId, 750);
-
-      // The worker stub reads this per call, so the failure can be turned on
-      // for exactly one test.
-      process.env.FORCE_PDF_FAILURE = 'true';
-      try {
-        const invoiceId = await createInvoice(fr.token, milestoneId);
-        // Waits for the retry chain to finish, not merely for the first
-        // failure — the flag must stay set until the saga has given up.
-        const invoice = await waitForRetriesExhausted(invoiceId, fr.token);
-
-        // The invoice was NOT rolled back. It is a financial record from the
-        // moment it exists; compensation moves it to a recoverable state
-        // rather than pretending the billing event never happened.
-        expect(invoice.id).toBe(invoiceId);
-        expect(invoice.subtotal).toBe('750.00');
-        expect(invoice.failureReason).toContain('PDF renderer unavailable');
-        expect(invoice.pdfUrl).toBeNull();
-
-        // Retried, and bounded. An unbounded retry against a deterministic
-        // failure is an infinite loop that looks like activity.
-        expect(invoice.generationAttempts).toBe(3);
-      } finally {
-        delete process.env.FORCE_PDF_FAILURE;
-      }
-    });
-
-    it('leaves the milestone invoiced, so a failure is not a silent redo', async () => {
-      const milestoneId = await completedMilestone(fr.token, frClientId, 300);
-
-      process.env.FORCE_PDF_FAILURE = 'true';
-      let invoiceId: string;
-      try {
-        invoiceId = await createInvoice(fr.token, milestoneId);
-        // Same reason as above: the flag must stay set until the saga has
-        // exhausted its retries, or a pending retry succeeds after it is
-        // cleared and the invoice never settles in GENERATION_FAILED.
-        await waitForRetriesExhausted(invoiceId, fr.token);
-      } finally {
-        delete process.env.FORCE_PDF_FAILURE;
-      }
-
-      // A failed render must not free the milestone to be invoiced again —
-      // that would be how a client ends up billed twice for one deliverable.
-      await request(server())
-        .post('/invoices')
-        .set('Authorization', `Bearer ${fr.token}`)
-        .send({ milestoneId })
-        .expect(409);
-    });
-  });
+  // The compensating path moved to test/worker.e2e-spec.ts in Sprint 5.
+  // PDF generation is a BullMQ job now, not an RPC, so forcing a failure means
+  // driving the queue through five attempts with exponential backoff — which
+  // belongs with the other queue tests and their longer timeouts.
 
   describe('the query side', () => {
     it('lists invoices with pagination metadata', async () => {
@@ -451,16 +354,14 @@ describe('Invoicing saga (e2e)', () => {
 
     it('filters by status', async () => {
       const response = await request(server())
-        .get('/invoices?status=GENERATION_FAILED&limit=100')
+        .get('/invoices?status=ISSUED&limit=100')
         .set('Authorization', `Bearer ${fr.token}`)
         .expect(200);
 
       const page = body<PaginatedResult<InvoiceDto>>(response);
       expect(page.items.length).toBeGreaterThan(0);
       expect(
-        page.items.every(
-          (i) => i.status === InvoiceStatusDto.GENERATION_FAILED,
-        ),
+        page.items.every((i) => i.status === InvoiceStatusDto.ISSUED),
       ).toBe(true);
     });
 

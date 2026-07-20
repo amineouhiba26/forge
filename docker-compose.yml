@@ -59,6 +59,26 @@ services:
       redis:
         condition: service_healthy
 
+  # Catches every outbound email locally: SMTP on 1025, web UI on 8025.
+  # Sprint 5 sends invoice emails, and a mail catcher means that path is
+  # exercised for real — a stubbed transport would leave the one thing worth
+  # testing (does an attachment actually get built and sent?) unproven.
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: forge-mailpit
+    restart: unless-stopped
+    ports:
+      - '1025:1025'
+      - '8025:8025'
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    healthcheck:
+      test: ['CMD', '/mailpit', 'readyz']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
 volumes:
   postgres-data:
   redis-data:

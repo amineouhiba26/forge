@@ -1,8 +1,9 @@
+import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CqrsModule } from '@nestjs/cqrs';
 
-import { billingServiceEnvSchema } from '@forge/contracts';
+import { QUEUES, billingServiceEnvSchema } from '@forge/contracts';
 import { PrismaModule } from '@forge/prisma';
 
 import { HealthController } from './health.controller';
@@ -10,7 +11,6 @@ import { CreateInvoiceHandler } from './invoices/commands/create-invoice.handler
 import {
   MarkGenerationFailedHandler,
   MarkInvoiceIssuedHandler,
-  RetryPdfGenerationHandler,
 } from './invoices/commands/invoice-state.handlers';
 import { InvoicesController } from './invoices/invoices.controller';
 import {
@@ -18,6 +18,7 @@ import {
   ListInvoicesHandler,
 } from './invoices/queries/invoice.query-handlers';
 import { InvoiceSaga } from './invoices/sagas/invoice.saga';
+import { WorkerEventsController } from './invoices/worker-events.controller';
 import { CreatePaymentIntentHandler } from './payments/create-payment-intent.handler';
 import { PaymentsController } from './payments/payments.controller';
 import { ProcessStripeWebhookHandler } from './payments/process-webhook.handler';
@@ -29,7 +30,6 @@ const CommandHandlers = [
   CreateInvoiceHandler,
   MarkInvoiceIssuedHandler,
   MarkGenerationFailedHandler,
-  RetryPdfGenerationHandler,
   CreatePaymentIntentHandler,
   ProcessStripeWebhookHandler,
 ];
@@ -46,11 +46,29 @@ const QueryHandlers = [GetInvoiceHandler, ListInvoicesHandler];
     }),
     PrismaModule,
     RpcClientsModule,
+    // Billing is the queue *producer*; worker-service is the consumer. Both
+    // point at the same Redis, and neither knows the other exists — which is
+    // the decoupling the RPC version did not have.
+    BullModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        connection: {
+          host: config.getOrThrow<string>('REDIS_HOST'),
+          port: config.getOrThrow<number>('REDIS_PORT'),
+        },
+      }),
+    }),
+    BullModule.registerQueue({ name: QUEUES.PDF }, { name: QUEUES.EMAIL }),
     // Provides CommandBus, QueryBus and EventBus, and wires up everything
     // decorated with @CommandHandler, @QueryHandler or @Saga.
     CqrsModule,
   ],
-  controllers: [HealthController, InvoicesController, PaymentsController],
+  controllers: [
+    HealthController,
+    InvoicesController,
+    PaymentsController,
+    WorkerEventsController,
+  ],
   providers: [
     TaxService,
     StripeService,
