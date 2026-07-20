@@ -1,39 +1,72 @@
+import { getQueueToken } from '@nestjs/bullmq';
 import { Test } from '@nestjs/testing';
-import { ICommand } from '@nestjs/cqrs';
-import { Observable, firstValueFrom, of, throwError, toArray } from 'rxjs';
+import { Observable, firstValueFrom, of, toArray } from 'rxjs';
 
-import { WORKER_CLIENT } from '../../rpc/rpc-clients.module';
-import {
-  MarkGenerationFailedCommand,
-  MarkInvoiceIssuedCommand,
-  RetryPdfGenerationCommand,
-} from '../commands/create-invoice.command';
+import { JOBS, QUEUES } from '@forge/contracts';
+import { PrismaService, TenantScopedClient } from '@forge/prisma';
+
 import {
   InvoiceCreatedEvent,
-  InvoiceGenerationFailedEvent,
+  InvoiceIssuedEvent,
 } from '../events/invoice.events';
 import { InvoiceSaga } from './invoice.saga';
 
 /**
- * Saga transitions, with the worker mocked.
+ * Saga transitions after the Sprint 5 rework.
  *
- * A saga is a pure mapping from an event stream to a command stream, which
- * makes it unusually testable: feed it events, collect the commands. Nothing
- * is persisted here — the handlers do that, and they are tested separately.
+ * What changed from Sprint 3: the saga emits no commands at all now. It
+ * enqueues durable work, and the outcome comes back later as an event — so
+ * these assertions are about *what was queued*, not what was returned.
  */
 describe('InvoiceSaga', () => {
   let saga: InvoiceSaga;
-  let worker: { send: jest.Mock };
+  let pdfQueue: { add: jest.Mock };
+  let emailQueue: { add: jest.Mock };
+  let prisma: { forTenant: jest.Mock };
+
+  const invoiceRow = {
+    id: 'invoice-1',
+    clientId: 'client-1',
+    total: { toFixed: () => '1200.00' },
+    currency: 'EUR',
+  };
+  const clientRow = {
+    id: 'client-1',
+    email: 'pay@wayne.test',
+    name: 'Wayne Enterprises',
+  };
+
+  function stubTx(invoice: unknown, client: unknown) {
+    return (_tenantId: string, fn: (tx: TenantScopedClient) => unknown) =>
+      fn({
+        invoice: { findUnique: () => Promise.resolve(invoice) },
+        client: { findUnique: () => Promise.resolve(client) },
+      } as unknown as TenantScopedClient);
+  }
 
   beforeEach(async () => {
-    worker = { send: jest.fn(() => of({ pdfUrl: '/invoices/invoice-1.pdf' })) };
+    pdfQueue = { add: jest.fn().mockResolvedValue({ id: 'job-1' }) };
+    emailQueue = { add: jest.fn().mockResolvedValue({ id: 'job-2' }) };
+    prisma = { forTenant: jest.fn(stubTx(invoiceRow, clientRow)) };
 
     const moduleRef = await Test.createTestingModule({
-      providers: [InvoiceSaga, { provide: WORKER_CLIENT, useValue: worker }],
+      providers: [
+        InvoiceSaga,
+        { provide: getQueueToken(QUEUES.PDF), useValue: pdfQueue },
+        { provide: getQueueToken(QUEUES.EMAIL), useValue: emailQueue },
+        { provide: PrismaService, useValue: prisma },
+      ],
     }).compile();
 
     saga = moduleRef.get(InvoiceSaga);
   });
+
+  type SagaBranch = (events$: Observable<unknown>) => Observable<unknown>;
+
+  /** Runs one branch over a single event and waits for it to complete. */
+  function runBranch(branch: SagaBranch, event: unknown): Promise<unknown[]> {
+    return firstValueFrom(branch(of(event)).pipe(toArray()));
+  }
 
   const created = new InvoiceCreatedEvent(
     'tenant-1',
@@ -44,106 +77,100 @@ describe('InvoiceSaga', () => {
     'corr-1',
   );
 
-  /**
-   * Runs one saga branch over a single event and collects the commands it
-   * emits. `toArray()` waits for the stream to complete, so a branch that
-   * emits nothing yields `[]` rather than hanging.
-   */
-  type SagaBranch = (events$: Observable<unknown>) => Observable<ICommand>;
-
-  function commandsFrom(
-    branch: SagaBranch,
-    event: unknown,
-  ): Promise<ICommand[]> {
-    return firstValueFrom(branch(of(event)).pipe(toArray()));
-  }
+  const issued = new InvoiceIssuedEvent(
+    'tenant-1',
+    'invoice-1',
+    '/storage/invoices/tenant-1/invoice-1.pdf',
+    'corr-1',
+  );
 
   describe('on InvoiceCreatedEvent', () => {
-    it('requests a PDF and issues the invoice when it succeeds', async () => {
-      const commands = await commandsFrom(saga.invoiceCreated, created);
+    it('queues a PDF job rather than calling the worker directly', async () => {
+      await runBranch(saga.invoiceCreated, created);
 
-      expect(worker.send).toHaveBeenCalledTimes(1);
-      expect(commands).toHaveLength(1);
-      expect(commands[0]).toBeInstanceOf(MarkInvoiceIssuedCommand);
-      expect((commands[0] as MarkInvoiceIssuedCommand).pdfUrl).toBe(
-        '/invoices/invoice-1.pdf',
-      );
+      expect(pdfQueue.add).toHaveBeenCalledTimes(1);
+      const [jobName, data] = pdfQueue.add.mock.calls[0] as [
+        string,
+        { invoiceId: string; tenantId: string },
+      ];
+
+      expect(jobName).toBe(JOBS.GENERATE_INVOICE_PDF);
+      expect(data.invoiceId).toBe('invoice-1');
+      expect(data.tenantId).toBe('tenant-1');
     });
 
-    it('compensates rather than throwing when generation fails', async () => {
-      worker.send.mockReturnValue(
-        throwError(() => new Error('PDF renderer unavailable')),
-      );
+    it('carries the correlation ID into the job payload', async () => {
+      await runBranch(saga.invoiceCreated, created);
 
-      const commands = await commandsFrom(saga.invoiceCreated, created);
+      const [, data] = pdfQueue.add.mock.calls[0] as [
+        string,
+        { correlationId: string },
+      ];
 
-      // The invoice is NOT deleted. It is a financial record from the moment
-      // it exists; compensation means moving it to a recoverable state.
-      expect(commands).toHaveLength(1);
-      expect(commands[0]).toBeInstanceOf(MarkGenerationFailedCommand);
-      expect((commands[0] as MarkGenerationFailedCommand).reason).toContain(
-        'PDF renderer unavailable',
-      );
+      // This is what lets the trace survive the queue boundary — the worker
+      // logs the same ID on the other side, possibly minutes later.
+      expect(data.correlationId).toBe('corr-1');
     });
 
-    it('carries the correlation ID into the command it emits', async () => {
-      const commands = await commandsFrom(saga.invoiceCreated, created);
+    it('uses a deterministic job id so a re-published event cannot double-queue', async () => {
+      await runBranch(saga.invoiceCreated, created);
 
-      expect((commands[0] as MarkInvoiceIssuedCommand).correlationId).toBe(
-        'corr-1',
-      );
+      const [, , options] = pdfQueue.add.mock.calls[0] as [
+        string,
+        unknown,
+        { jobId: string },
+      ];
+
+      expect(options.jobId).toBe('pdf-invoice-1');
+    });
+
+    it('applies the shared retry policy with exponential backoff', async () => {
+      await runBranch(saga.invoiceCreated, created);
+
+      const [, , options] = pdfQueue.add.mock.calls[0] as [
+        string,
+        unknown,
+        { attempts: number; backoff: { type: string; delay: number } },
+      ];
+
+      expect(options.attempts).toBe(5);
+      // Fixed-interval retries hammer a service that is failing *because* it
+      // is overloaded; doubling gives it room to recover.
+      expect(options.backoff.type).toBe('exponential');
+      expect(options.backoff.delay).toBe(2000);
+    });
+
+    it('emits no commands — the outcome arrives later as an event', async () => {
+      const emitted = await runBranch(saga.invoiceCreated, created);
+
+      expect(emitted).toHaveLength(0);
     });
   });
 
-  describe('on InvoiceGenerationFailedEvent', () => {
-    const failedAfter = (attempts: number) =>
-      new InvoiceGenerationFailedEvent(
-        'tenant-1',
-        'invoice-1',
-        'PDF renderer unavailable',
-        attempts,
-        'corr-1',
-      );
+  describe('on InvoiceIssuedEvent', () => {
+    it('queues the email with the recipient resolved at send time', async () => {
+      await runBranch(saga.invoiceIssued, issued);
 
-    it('queues a retry while attempts remain', async () => {
-      const commands = await commandsFrom(
-        saga.generationFailed,
-        failedAfter(1),
-      );
+      expect(emailQueue.add).toHaveBeenCalledTimes(1);
+      const [jobName, data] = emailQueue.add.mock.calls[0] as [
+        string,
+        { recipientEmail: string; pdfPath: string; invoiceTotal: string },
+      ];
 
-      expect(commands).toHaveLength(1);
-      expect(commands[0]).toBeInstanceOf(RetryPdfGenerationCommand);
+      expect(jobName).toBe(JOBS.SEND_INVOICE_EMAIL);
+      // Read from the client record rather than carried on the event: an event
+      // records what happened, while an address is current state.
+      expect(data.recipientEmail).toBe('pay@wayne.test');
+      expect(data.pdfPath).toBe('/storage/invoices/tenant-1/invoice-1.pdf');
+      expect(data.invoiceTotal).toBe('1200.00');
     });
 
-    it('still retries on the second failure', async () => {
-      const commands = await commandsFrom(
-        saga.generationFailed,
-        failedAfter(2),
-      );
+    it('does not queue an email when the invoice has vanished', async () => {
+      prisma.forTenant.mockImplementation(stubTx(null, null));
 
-      expect(commands).toHaveLength(1);
-      expect(commands[0]).toBeInstanceOf(RetryPdfGenerationCommand);
-    });
+      await runBranch(saga.invoiceIssued, issued);
 
-    it('gives up at the attempt cap instead of retrying forever', async () => {
-      const commands = await commandsFrom(
-        saga.generationFailed,
-        failedAfter(3),
-      );
-
-      // An unbounded retry against a deterministic failure is an infinite
-      // loop that looks like activity. The invoice stays in
-      // GENERATION_FAILED, which is queryable and actionable.
-      expect(commands).toHaveLength(0);
-    });
-
-    it('does not retry past the cap either', async () => {
-      const commands = await commandsFrom(
-        saga.generationFailed,
-        failedAfter(7),
-      );
-
-      expect(commands).toHaveLength(0);
+      expect(emailQueue.add).not.toHaveBeenCalled();
     });
   });
 });

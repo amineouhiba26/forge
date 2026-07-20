@@ -125,10 +125,59 @@ describe('env validation schemas', () => {
   });
 
   describe('workerServiceEnvSchema', () => {
-    it('does not require DATABASE_URL — the worker owns no tables', () => {
-      const { error } = workerServiceEnvSchema.validate(validRedis);
+    const validWorkerRuntime = {
+      SMTP_HOST: 'localhost',
+      SMTP_PORT: 1025,
+      MAIL_FROM: 'billing@forge.local',
+    };
+
+    it('now requires DATABASE_URL — the worker owns tables as of Sprint 5', () => {
+      // This assertion is the reverse of the one it replaces. Sprint 0 had the
+      // worker owning no tables; Sprint 5 gave it processed_jobs and
+      // dead_letter_jobs, because queue state that must survive a Redis flush
+      // needs somewhere durable. The old test failing is what surfaced the
+      // reversal, which is what it was there for.
+      const { error } = workerServiceEnvSchema.validate({
+        ...validRedis,
+        ...validWorkerRuntime,
+      });
+
+      expect(error?.message).toContain('DATABASE_URL');
+    });
+
+    it('accepts a complete worker environment', () => {
+      const { error } = workerServiceEnvSchema.validate({
+        ...validRedis,
+        ...validDb,
+        ...validWorkerRuntime,
+      });
 
       expect(error).toBeUndefined();
+    });
+
+    it('defaults STORAGE_DIR rather than demanding it', () => {
+      const result = workerServiceEnvSchema.validate({
+        ...validRedis,
+        ...validDb,
+        ...validWorkerRuntime,
+      });
+
+      expect(result.error).toBeUndefined();
+      const value = result.value as { STORAGE_DIR: string };
+      expect(value.STORAGE_DIR).toBe('./storage');
+    });
+
+    it('rejects a malformed sender address', () => {
+      // A bad MAIL_FROM fails at the SMTP layer on the first send, which is
+      // far from the cause. Better to refuse to boot.
+      const { error } = workerServiceEnvSchema.validate({
+        ...validRedis,
+        ...validDb,
+        ...validWorkerRuntime,
+        MAIL_FROM: 'not-an-address',
+      });
+
+      expect(error?.message).toContain('MAIL_FROM');
     });
   });
 });

@@ -46,6 +46,9 @@ lerna-debug.log*
 .temp
 .tmp
 
+# Rendered invoice PDFs — build output of a job, not source
+/storage
+
 # Prisma client is generated from schema.prisma — regenerate, don't commit
 /libs/prisma/src/generated
 

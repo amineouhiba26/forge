@@ -1,4 +1,4 @@
-// Sprint 4: adds ProcessedWebhook and the Stripe fields on Invoice/Payment.
+// Sprint 5: adds ProcessedJob and DeadLetterJob for the queue infrastructure.
 
 generator client {
   provider = "prisma-client"
@@ -321,4 +321,71 @@ model ProcessedWebhook {
 
   @@index([eventType])
   @@map("processed_webhooks")
+}
+
+enum JobState {
+  /// Taken by a worker, not yet finished.
+  CLAIMED
+  /// Finished successfully. The side effect has happened.
+  COMPLETED
+}
+
+/// Job-level idempotency, so a reprocessed job does not repeat its side effect.
+///
+/// BullMQ can deliver a job more than once: a worker that crashes after doing
+/// the work but before acknowledging leaves the job to be retried. For a PDF
+/// render that is harmless (same bytes, same path). For an email it means a
+/// client receives the same invoice twice.
+///
+/// Not tenant-scoped and no RLS, for the same reason as ProcessedWebhook: the
+/// key must be globally unique to be a dedupe key at all.
+model ProcessedJob {
+  id String @id @default(uuid()) @db.Uuid
+
+  /// Deterministic and derived from what the job *does*, not from its BullMQ
+  /// id — a retry gets a new attempt but must produce the same key.
+  /// e.g. `email:invoice-issued:<invoiceId>`
+  jobKey String @unique @map("job_key")
+
+  state JobState @default(CLAIMED)
+
+  tenantId String? @map("tenant_id") @db.Uuid
+
+  claimedAt   DateTime  @default(now()) @map("claimed_at")
+  completedAt DateTime? @map("completed_at")
+
+  @@index([state])
+  @@map("processed_jobs")
+}
+
+/// Jobs that exhausted their retries.
+///
+/// The backlog's requirement is that these are not silently dropped. BullMQ
+/// keeps failed jobs in Redis, but Redis is a cache that gets flushed and
+/// resized — a durable row is what makes "which invoices never got emailed?"
+/// answerable weeks later.
+model DeadLetterJob {
+  id String @id @default(uuid()) @db.Uuid
+
+  queueName String @map("queue_name")
+  jobName   String @map("job_name")
+  /// BullMQ's own id, so the failed job can be found in Redis while it lasts.
+  jobId     String @map("job_id")
+
+  /// The full job payload, so it can be replayed by hand after a fix.
+  payload Json
+
+  failedReason String  @map("failed_reason")
+  stackTrace   String? @map("stack_trace")
+  attempts     Int
+
+  /// Carried so the whole journey stays greppable, including this end of it.
+  correlationId String? @map("correlation_id")
+  tenantId      String? @map("tenant_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([queueName])
+  @@index([tenantId])
+  @@map("dead_letter_jobs")
 }

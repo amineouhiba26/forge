@@ -137,7 +137,26 @@ export const billingServiceEnvSchema = Joi.object({
   ...stripeSchema,
 });
 
+/** Worker-side: where rendered PDFs go, and how to send mail. */
+const workerRuntimeSchema = {
+  STORAGE_DIR: Joi.string().default('./storage'),
+  SMTP_HOST: Joi.string().hostname().required(),
+  SMTP_PORT: Joi.number().port().required(),
+  SMTP_USER: Joi.string().allow('').optional(),
+  SMTP_PASSWORD: Joi.string().allow('').optional(),
+  // `tlds: false` disables Joi's known-TLD check. It is on by default and
+  // rejects internal domains like `billing@forge.local`, which is exactly what
+  // a self-hosted mail setup uses. The shape is still validated.
+  MAIL_FROM: Joi.string().email({ tlds: false }).required(),
+};
+
 export const workerServiceEnvSchema = Joi.object({
   ...baseSchema,
   ...redisTransportSchema,
+  // The worker owns tables as of Sprint 5 — processed_jobs and
+  // dead_letter_jobs — so it needs a database connection. This reverses the
+  // Sprint 0 note that it never would; queue infrastructure that survives a
+  // Redis flush has to live somewhere durable.
+  ...databaseSchema,
+  ...workerRuntimeSchema,
 });

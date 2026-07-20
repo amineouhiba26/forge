@@ -39,19 +39,3 @@ export class MarkInvoiceIssuedCommand {
     public readonly correlationId: string,
   ) {}
 }
-
-/**
- * Queued by the compensating path so a transient failure gets another attempt.
- *
- * Sprint 5 moves this onto a BullMQ queue with real backoff. Today it is an
- * in-process retry, which is honest about being a placeholder: if the process
- * dies, the retry is lost — and the invoice is still safely in
- * GENERATION_FAILED rather than a silent broken state.
- */
-export class RetryPdfGenerationCommand {
-  constructor(
-    public readonly tenantId: string,
-    public readonly invoiceId: string,
-    public readonly correlationId: string,
-  ) {}
-}

@@ -136,6 +136,35 @@ Tenant isolation is enforced by Postgres Row-Level Security, not by application
 filtering. The services connect as an unprivileged role that is subject to those
 policies; migrations use a separate owner connection.
 
+## Async processing
+
+Invoice PDFs and client emails are BullMQ jobs, not inline work. billing-service
+produces; worker-service consumes; neither imports the other.
+
+| Queue | Job | Purpose |
+| --- | --- | --- |
+| `pdf` | `generate-invoice-pdf` | Renders the invoice, stores it, reports back |
+| `email` | `send-invoice-email` | Emails the client with the PDF attached |
+
+Jobs retry five times with exponential backoff. On exhaustion they are recorded
+in `dead_letter_jobs` with their full payload and correlation ID, so a failure
+survives a Redis flush and can be replayed by hand.
+
+Email sending is idempotent: a reprocessed job does not send a second copy.
+Exactly-once delivery is not possible across an SMTP boundary, so the send is
+recorded *after* it succeeds — a visible duplicate is preferable to silent
+non-delivery for an invoice.
+
+Every request gets a correlation ID at the gateway that travels through the
+command, the event, the queued job and the worker's logs:
+
+```bash
+grep <correlation-id> *.log   # gateway → billing → worker, including retries
+```
+
+Local mail is caught by Mailpit at http://localhost:8025 — nothing leaves the
+machine.
+
 ## Tests
 
 ```bash

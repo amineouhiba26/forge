@@ -71,10 +71,8 @@ export const BILLING_PATTERNS = {
 
 export const WORKER_PATTERNS = {
   PING: 'worker.health.ping',
-
-  /**
-   * Renders an invoice PDF. Sprint 3 answers synchronously so the saga can
-   * observe failure and compensate; Sprint 5 replaces it with a BullMQ job.
-   */
-  GENERATE_INVOICE_PDF: 'worker.pdf.generateInvoice',
+  // Sprint 3's synchronous `worker.pdf.generateInvoice` is gone. PDF work is
+  // a durable BullMQ job as of Sprint 5 — see `queues.ts`. The pattern was
+  // removed rather than left in place, because a dead message pattern reads
+  // as a live one.
 } as const;

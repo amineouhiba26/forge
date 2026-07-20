@@ -1,13 +1,8 @@
-import { Inject, Logger } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { CommandHandler, EventBus, ICommandHandler } from '@nestjs/cqrs';
-import { ClientProxy } from '@nestjs/microservices';
 
-import { WORKER_PATTERNS } from '@forge/contracts';
-import type { GeneratePdfResult } from '@forge/contracts';
 import { PrismaService } from '@forge/prisma';
 
-import { WORKER_CLIENT } from '../../rpc/rpc-clients.module';
-import { rpcSend } from '../../rpc/rpc-send';
 import {
   InvoiceGenerationFailedEvent,
   InvoiceIssuedEvent,
@@ -15,7 +10,6 @@ import {
 import {
   MarkGenerationFailedCommand,
   MarkInvoiceIssuedCommand,
-  RetryPdfGenerationCommand,
 } from './create-invoice.command';
 
 @CommandHandler(MarkInvoiceIssuedCommand)
@@ -107,87 +101,5 @@ export class MarkGenerationFailedHandler implements ICommandHandler<MarkGenerati
         correlationId,
       ),
     );
-  }
-}
-
-/**
- * Re-attempts the render for an invoice sitting in GENERATION_FAILED.
- *
- * In-process today. Sprint 5 moves this onto a BullMQ queue with exponential
- * backoff, at which point a crash mid-retry stops losing the attempt. The
- * invoice is never lost either way — it stays in GENERATION_FAILED until a
- * render succeeds.
- */
-@CommandHandler(RetryPdfGenerationCommand)
-export class RetryPdfGenerationHandler implements ICommandHandler<RetryPdfGenerationCommand> {
-  private readonly logger = new Logger(RetryPdfGenerationHandler.name);
-
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly eventBus: EventBus,
-    @Inject(WORKER_CLIENT) private readonly worker: ClientProxy,
-  ) {}
-
-  async execute(command: RetryPdfGenerationCommand): Promise<void> {
-    const { tenantId, invoiceId, correlationId } = command;
-
-    try {
-      const result = await rpcSend<GeneratePdfResult>(
-        this.worker,
-        WORKER_PATTERNS.GENERATE_INVOICE_PDF,
-        { tenantId, invoiceId, correlationId },
-      );
-
-      await this.prisma.forTenant(tenantId, (tx) =>
-        tx.invoice.update({
-          where: { id: invoiceId },
-          data: {
-            status: 'ISSUED',
-            pdfUrl: result.pdfUrl,
-            issuedAt: new Date(),
-            failureReason: null,
-          },
-        }),
-      );
-
-      this.logger.log(
-        `Invoice ${invoiceId} ISSUED on retry (correlationId=${correlationId})`,
-      );
-
-      this.eventBus.publish(
-        new InvoiceIssuedEvent(
-          tenantId,
-          invoiceId,
-          result.pdfUrl,
-          correlationId,
-        ),
-      );
-    } catch (error) {
-      const reason = (error as Error).message ?? 'PDF generation failed';
-
-      const invoice = await this.prisma.forTenant(tenantId, (tx) =>
-        tx.invoice.update({
-          where: { id: invoiceId },
-          data: {
-            status: 'GENERATION_FAILED',
-            failureReason: reason,
-            generationAttempts: { increment: 1 },
-          },
-        }),
-      );
-
-      // Re-published so the saga re-evaluates the attempt cap. This is the
-      // loop's exit condition: each failure increments the count, and the
-      // saga stops emitting retries once it reaches the maximum.
-      this.eventBus.publish(
-        new InvoiceGenerationFailedEvent(
-          tenantId,
-          invoiceId,
-          reason,
-          invoice.generationAttempts,
-          correlationId,
-        ),
-      );
-    }
   }
 }

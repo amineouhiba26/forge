@@ -79,17 +79,6 @@ export interface TenantDto {
   country: string;
 }
 
-/** Payload for the worker's PDF request. */
-export interface GeneratePdfRequest {
-  correlationId: string;
-  tenantId: string;
-  invoiceId: string;
-}
-
-export interface GeneratePdfResult {
-  pdfUrl: string;
-}
-
 export type CreateInvoiceRpcRequest = Enveloped<CreateInvoiceDto> & {
   tenantId: string;
 };
