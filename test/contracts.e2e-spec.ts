@@ -23,6 +23,7 @@ import { PrismaService } from '@forge/prisma';
 import { AppModule as GatewayModule } from '../apps/gateway/src/app.module';
 import { AppModule as ContractsModule } from '../apps/contracts-service/src/app.module';
 import { AppModule as TenantsModule } from '../apps/tenants-service/src/app.module';
+import { assertNoCompetingServices } from './support/no-competing-services';
 
 function body<T>(response: { body: unknown }): T {
   return response.body as T;
@@ -60,6 +61,9 @@ describe('Clients & contracts (e2e)', () => {
   let milestoneId: string;
 
   beforeAll(async () => {
+    // Fails fast and explains itself if another stack is on this Redis.
+    await assertNoCompetingServices();
+
     tenantsService = await NestFactory.createMicroservice<MicroserviceOptions>(
       TenantsModule,
       { ...buildRedisTransportOptions(), logger: false },
