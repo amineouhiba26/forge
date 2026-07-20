@@ -21,6 +21,7 @@ import { AppModule as BillingModule } from '../apps/billing-service/src/app.modu
 import { AppModule as ContractsModule } from '../apps/contracts-service/src/app.module';
 import { AppModule as GatewayModule } from '../apps/gateway/src/app.module';
 import { AppModule as TenantsModule } from '../apps/tenants-service/src/app.module';
+import { assertNoCompetingServices } from './support/no-competing-services';
 import { AppModule as WorkerModule } from '../apps/worker-service/src/app.module';
 
 function body<T>(response: { body: unknown }): T {
@@ -80,6 +81,9 @@ describe('Invoicing saga (e2e)', () => {
   let frClientId: string;
 
   beforeAll(async () => {
+    // Fails fast and explains itself if another stack is on this Redis.
+    await assertNoCompetingServices();
+
     for (const module of [
       TenantsModule,
       ContractsModule,

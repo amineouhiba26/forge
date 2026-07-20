@@ -173,6 +173,16 @@ npm run test:e2e  # end-to-end — requires docker compose up + migrations
 npm run lint
 ```
 
+The e2e suites boot their own service instances against the shared Redis, so
+they refuse to start while another stack is running:
+
+```bash
+pkill -f "dist/apps"   # stop a manually-started stack first
+```
+
+Two subscribers on one pattern means requests are answered by whichever wins
+the race, which produces misleading failures rather than obvious ones.
+
 ## Ports
 
 Gateway `3000` · Postgres `5433` · Redis `6379` · Adminer `8080` ·
