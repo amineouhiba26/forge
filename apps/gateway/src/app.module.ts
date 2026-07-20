@@ -6,7 +6,9 @@ import { gatewayEnvSchema } from '@forge/contracts';
 
 import { AuthModule } from './auth/auth.module';
 import { JwtCaslGuard } from './auth/jwt-casl.guard';
+import { ClientsModule } from './clients/clients.module';
 import { CorrelationIdMiddleware } from './common/correlation-id.middleware';
+import { ContractsModule } from './contracts/contracts.module';
 import { HealthModule } from './health/health.module';
 import { PingModule } from './ping/ping.module';
 import { UsersModule } from './users/users.module';
@@ -19,6 +21,8 @@ import { UsersModule } from './users/users.module';
       validationOptions: { abortEarly: false },
     }),
     AuthModule,
+    ClientsModule,
+    ContractsModule,
     HealthModule,
     PingModule,
     UsersModule,

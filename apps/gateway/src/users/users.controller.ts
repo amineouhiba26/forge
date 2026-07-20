@@ -9,7 +9,7 @@ import type { AuthenticatedUser } from '@forge/contracts';
 
 import { CurrentUser } from '../auth/current-user.decorator';
 import { RequirePermission } from '../auth/casl/require-permission.decorator';
-import { TENANTS_CLIENT } from '../clients/clients.module';
+import { TENANTS_CLIENT } from '../rpc/rpc-clients.module';
 import { CorrelationId } from '../common/correlation-id.decorator';
 import { rpc } from '../common/rpc';
 

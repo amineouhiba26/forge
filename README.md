@@ -64,6 +64,29 @@ routes take `Authorization: Bearer <accessToken>`.
 | `GET /users` | JWT | List users in your tenant |
 | `GET /users/:id` | JWT | Read one user in your tenant |
 
+## Domain
+
+| Route | Role | Purpose |
+| --- | --- | --- |
+| `POST /clients` | admin/owner | Create a client |
+| `GET /clients` | any | List — `?page&limit&search&includeArchived` |
+| `GET /clients/:id` | any | Read one |
+| `PATCH /clients/:id` | admin/owner | Partial update |
+| `DELETE /clients/:id` | admin/owner | Archive (soft delete) |
+| `POST /contracts` | admin/owner | Create with nested milestones |
+| `GET /contracts` | any | List — `?page&limit&status&clientId&search` |
+| `GET /contracts/:id` | any | Read one, with milestones |
+| `PATCH /contracts/:id` | admin/owner | Partial update and status transitions |
+| `GET /contracts/:id/milestones` | any | List milestones |
+| `PATCH /contracts/:id/milestones/:mid/complete` | any | Mark complete |
+
+Contracts move `DRAFT → ACTIVE → COMPLETED`, with `CANCELLED` reachable from
+either of the first two. `COMPLETED` and `CANCELLED` are terminal. Milestones
+can only be completed on an active contract.
+
+Monetary amounts are stored as `Decimal(12,2)` and serialised as strings —
+JSON numbers are IEEE 754 doubles and would reintroduce rounding error.
+
 Tenant isolation is enforced by Postgres Row-Level Security, not by application
 filtering. The services connect as an unprivileged role that is subject to those
 policies; migrations use a separate owner connection.

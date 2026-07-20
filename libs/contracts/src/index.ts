@@ -5,3 +5,6 @@ export * from './events';
 export * from './dto/message-envelope.dto';
 export * from './dto/ping.dto';
 export * from './dto/auth.dto';
+export * from './dto/pagination.dto';
+export * from './dto/client.dto';
+export * from './dto/contract.dto';
