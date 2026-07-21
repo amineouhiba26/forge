@@ -11,35 +11,10 @@ jobs:
     name: Lint, build & test
     runs-on: ubuntu-latest
 
-    # Real Postgres and Redis, because the e2e suite asserts tenant isolation
-    # is enforced by Postgres Row-Level Security. Mocking the database would
-    # test the mock, not the policies — the one thing worth proving here.
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: forge
-          POSTGRES_PASSWORD: forge
-          POSTGRES_DB: forge
-        ports:
-          - 5433:5432
-        # Without this the job races Postgres' startup and fails at random.
-        options: >-
-          --health-cmd "pg_isready -U forge -d forge"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-
+    # No `services:` block. The e2e suite starts its own Postgres and Redis
+    # through Testcontainers, so the database it tests against is created and
+    # destroyed per run — the same code path a developer gets locally, rather
+    # than a CI-only arrangement that can drift from it.
     env:
       NODE_ENV: test
       REDIS_HOST: localhost
@@ -47,6 +22,8 @@ jobs:
       # The app connects as the unprivileged role created by the RLS
       # migration; migrations run as the owner. Using one connection for both
       # would silently disable every policy, since the owner is a superuser.
+      # Placeholders only: the unit tests never connect, and the e2e suite
+      # overwrites both from the container it starts.
       DATABASE_URL: postgresql://forge_app:forge_app@localhost:5433/forge?schema=public
       DATABASE_MIGRATION_URL: postgresql://forge:forge@localhost:5433/forge?schema=public
       # CI-only values. Real secrets live in the deployment environment.
@@ -99,11 +76,6 @@ jobs:
 
       - name: Unit tests
         run: npm test
-
-      - name: Apply migrations
-        # `migrate deploy`, not `migrate dev`: it only applies existing
-        # migrations and never generates new ones from schema drift.
-        run: npx prisma migrate deploy
 
       - name: End-to-end tests
         run: npm run test:e2e

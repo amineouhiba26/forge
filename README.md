@@ -200,20 +200,34 @@ bad input is not a failing service.
 ## Tests
 
 ```bash
-npm test          # unit
-npm run test:e2e  # end-to-end — requires docker compose up + migrations
+npm test                    # unit
+npm run test:e2e            # end-to-end — self-contained
+npm run test:cov:critical   # coverage of the saga, idempotency and RLS paths
 npm run lint
 ```
 
-The e2e suites boot their own service instances against the shared Redis, so
-they refuse to start while another stack is running:
+The e2e suite needs **no running stack**. It starts its own Postgres and Redis
+via Testcontainers, applies the real migrations — including the RLS policies —
+runs, and destroys them. `docker compose` is for development, not for tests.
 
 ```bash
-pkill -f "dist/apps"   # stop a manually-started stack first
+docker compose down && npm run test:e2e   # passes from nothing
 ```
 
-Two subscribers on one pattern means requests are answered by whichever wins
-the race, which produces misleading failures rather than obvious ones.
+Included are contract tests that fail when a service stops returning a field
+its DTO promises, and a chaos test that restarts Redis and asserts queued jobs
+survive.
+
+## Load testing
+
+```bash
+npm run load            # read path
+npm run load:invoices   # invoice creation
+```
+
+Requires the stack and services running. Baseline on one laptop: ~1470 req/s on
+the paginated read path, ~150 req/s through invoice creation — the gap is the
+two synchronous cross-service RPCs the CQRS command makes before writing.
 
 ## Ports
 

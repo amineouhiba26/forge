@@ -16,5 +16,7 @@
     "^(\\.{1,2}/.*)\\.js$": "$1",
     "^@forge/observability(|/.*)$": "<rootDir>/libs/observability/src/$1"
   },
-  "testTimeout": 30000
+  "testTimeout": 60000,
+  "globalSetup": "<rootDir>/test/support/global-setup.ts",
+  "globalTeardown": "<rootDir>/test/support/global-teardown.ts"
 }

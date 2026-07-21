@@ -14,7 +14,6 @@ import { AppModule as ContractsModule } from '../apps/contracts-service/src/app.
 import { AppModule as GatewayModule } from '../apps/gateway/src/app.module';
 import { CircuitBreakerService } from '../apps/gateway/src/rpc/circuit-breaker.service';
 import { AppModule as TenantsModule } from '../apps/tenants-service/src/app.module';
-import { assertNoCompetingServices } from './support/no-competing-services';
 
 function body<T>(response: { body: unknown }): T {
   return response.body as T;
@@ -41,8 +40,6 @@ describe('Observability & resilience (e2e)', () => {
   let token: string;
 
   beforeAll(async () => {
-    await assertNoCompetingServices();
-
     for (const module of [TenantsModule, ContractsModule, BillingModule]) {
       const service = await NestFactory.createMicroservice<MicroserviceOptions>(
         module,

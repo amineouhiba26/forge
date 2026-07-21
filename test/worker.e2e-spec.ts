@@ -21,7 +21,6 @@ import { AppModule as BillingModule } from '../apps/billing-service/src/app.modu
 import { AppModule as ContractsModule } from '../apps/contracts-service/src/app.module';
 import { AppModule as GatewayModule } from '../apps/gateway/src/app.module';
 import { AppModule as TenantsModule } from '../apps/tenants-service/src/app.module';
-import { assertNoCompetingServices } from './support/no-competing-services';
 import { AppModule as WorkerModule } from '../apps/worker-service/src/app.module';
 import { MailService } from '../apps/worker-service/src/email/mail.service';
 import { PdfRendererService } from '../apps/worker-service/src/pdf/pdf-renderer.service';
@@ -59,9 +58,6 @@ describe('Async worker chain (e2e)', () => {
   let failPdf = false;
 
   beforeAll(async () => {
-    // Fails fast and explains itself if another stack is on this Redis.
-    await assertNoCompetingServices();
-
     for (const module of [TenantsModule, ContractsModule, BillingModule]) {
       const service = await NestFactory.createMicroservice<MicroserviceOptions>(
         module,
