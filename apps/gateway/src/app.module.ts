@@ -1,7 +1,8 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { LoggerModule } from 'nestjs-pino';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { ThrottlerModule } from '@nestjs/throttler';
 
 import { gatewayEnvSchema } from '@forge/contracts';
 import {
@@ -29,6 +30,22 @@ import { WebhooksModule } from './webhooks/webhooks.module';
       validationOptions: { abortEarly: false },
     }),
     LoggerModule.forRoot(buildLoggerConfig('gateway')),
+    // Rate-limit config, read from env so a deployment can tune it and the
+    // e2e suites can loosen it. The guard itself is applied only to the auth
+    // controller (see AuthController) rather than globally — the brute-force
+    // surface is the credential endpoints, and throttling the whole API would
+    // also throttle a tenant's legitimate bulk use of its own data.
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        throttlers: [
+          {
+            ttl: config.getOrThrow<number>('AUTH_THROTTLE_TTL_MS'),
+            limit: config.getOrThrow<number>('AUTH_THROTTLE_LIMIT'),
+          },
+        ],
+      }),
+    }),
     RpcInfrastructureModule,
     AuthModule,
     ClientsModule,

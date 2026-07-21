@@ -1,3 +1,18 @@
+# Settings every service shares. Declared once so the log shape, the transport
+# and the trace endpoint cannot drift between them.
+x-service-env: &service-env
+  NODE_ENV: production
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+  OTEL_ENABLED: 'true'
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+
+# The unprivileged application role — subject to row-level security. Postgres
+# exempts superusers from RLS entirely, so the services must never connect as
+# the owner.
+x-app-database-url: &app-database-url postgresql://forge_app:forge_app@postgres:5432/forge?schema=public
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -105,6 +120,135 @@ services:
       timeout: 5s
       retries: 10
 
+
+  # ---------------------------------------------------------------------------
+  # Application services
+  # ---------------------------------------------------------------------------
+  # `docker compose up` starts the whole system, which is what the Sprint 8
+  # Definition of Done asks for. To develop against source instead, start only
+  # the infrastructure and run the services with `npm run start:*`:
+  #
+  #   docker compose up -d postgres redis mailpit jaeger
+  #
+  # Otherwise the gateway container and a locally-run gateway both want :3000.
+
+  # Applies the migrations once, then exits. Every service waits for it to
+  # succeed, so a first `docker compose up` on an empty database works without
+  # a documented manual step.
+  #
+  # Built to the `build` stage rather than `runtime`: migrations need the
+  # Prisma CLI and the migration SQL, both of which the runtime stage
+  # deliberately drops.
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/tenants-service/Dockerfile
+      target: build
+    command: npx prisma migrate deploy
+    environment:
+      # The owner connection — migrations need DDL rights that the application
+      # role must never hold.
+      DATABASE_MIGRATION_URL: postgresql://forge:forge@postgres:5432/forge?schema=public
+      DATABASE_URL: postgresql://forge:forge@postgres:5432/forge?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+
+  gateway:
+    build:
+      context: .
+      dockerfile: apps/gateway/Dockerfile
+    environment:
+      <<: *service-env
+      PORT: 3000
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-dev-only-access-secret-change-me-0123456789abcdef}
+      # Deliberately the strict production value here rather than the loosened
+      # one the test suites use — the stack a reviewer runs should behave like
+      # the real thing.
+      AUTH_THROTTLE_TTL_MS: 60000
+      AUTH_THROTTLE_LIMIT: 10
+      SWAGGER_ENABLED: 'true'
+    ports:
+      - '3000:3000'
+    depends_on:
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  tenants-service:
+    build:
+      context: .
+      dockerfile: apps/tenants-service/Dockerfile
+    environment:
+      <<: *service-env
+      DATABASE_URL: *app-database-url
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-dev-only-access-secret-change-me-0123456789abcdef}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-only-refresh-secret-change-me-fedcba9876543210}
+      JWT_ACCESS_TTL: 15m
+      JWT_REFRESH_TTL: 7d
+    depends_on:
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  contracts-service:
+    build:
+      context: .
+      dockerfile: apps/contracts-service/Dockerfile
+    environment:
+      <<: *service-env
+      DATABASE_URL: *app-database-url
+    depends_on:
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  billing-service:
+    build:
+      context: .
+      dockerfile: apps/billing-service/Dockerfile
+    environment:
+      <<: *service-env
+      DATABASE_URL: *app-database-url
+      # Placeholders. Stripe is never contacted unless a payment intent is
+      # created; the webhook path verifies signatures against the secret below,
+      # so the demo script can sign its own payloads.
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-sk_test_placeholder_not_a_real_key}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-whsec_placeholder_not_a_real_secret}
+    depends_on:
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  worker-service:
+    build:
+      context: .
+      dockerfile: apps/worker-service/Dockerfile
+    environment:
+      <<: *service-env
+      DATABASE_URL: *app-database-url
+      STORAGE_DIR: /app/storage
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      MAIL_FROM: billing@forge.local
+    volumes:
+      # Rendered PDFs survive a container restart, and can be inspected from
+      # the host while demonstrating the invoice flow.
+      - invoice-storage:/app/storage
+    depends_on:
+      redis:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
 volumes:
   postgres-data:
   redis-data:
+  invoice-storage:

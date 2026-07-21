@@ -1,0 +1,27 @@
+# Build context exclusions.
+#
+# `.env` is the important one and the reason this file is not an afterthought.
+# `ConfigModule` builds its validated config from the `.env` *file*, and
+# `ConfigService.get()` consults that before `process.env` — so a `.env` baked
+# into an image would silently override the environment a deployment injects,
+# including its secrets. The image must not contain one.
+.env
+.env.*
+!.env.example
+
+node_modules
+dist
+coverage
+storage
+
+.git
+.github
+.vscode
+
+# Local-only material, and the backlog itself.
+docs
+producktBaclog.md
+
+# Test material is not needed at runtime; the image builds from source.
+**/*.spec.ts
+test
