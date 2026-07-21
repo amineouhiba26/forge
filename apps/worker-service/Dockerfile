@@ -58,6 +58,15 @@ COPY package.json ./
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 
+# The storage directory must exist in the image, owned by `node`, *before* the
+# volume is mounted. Docker seeds a fresh named volume from the image's
+# directory — including its ownership — so without this the volume is created
+# owned by root and the non-root process cannot write to it. The symptom is
+# PDF generation failing with EACCES on every attempt and dead-lettering, which
+# the host-based tests never see because they write to a developer-owned
+# directory instead.
+RUN mkdir -p /app/storage && chown node:node /app/storage
+
 # Never root. A container escape should not start with uid 0, and `node` is
 # already present in the base image.
 USER node

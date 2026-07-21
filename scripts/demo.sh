@@ -19,8 +19,33 @@
 set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://localhost:3000}"
-WEBHOOK_SECRET="${STRIPE_WEBHOOK_SECRET:-whsec_placeholder_not_a_real_secret}"
 RUN="$(date +%s)"
+
+# The webhook signature has to be computed with the secret the *running stack*
+# uses, not a guess. compose substitutes ${STRIPE_WEBHOOK_SECRET} from the local
+# .env, so anyone who generated their own secret would otherwise sign with a
+# different one and see every delivery rejected as a forgery — the endpoint
+# behaving correctly, the script being wrong.
+resolve_webhook_secret() {
+  if [ -n "${STRIPE_WEBHOOK_SECRET:-}" ]; then
+    printf '%s' "$STRIPE_WEBHOOK_SECRET"
+    return
+  fi
+
+  if command -v docker >/dev/null 2>&1; then
+    local from_container
+    from_container="$(docker compose exec -T billing-service \
+      printenv STRIPE_WEBHOOK_SECRET 2>/dev/null | tr -d '\r\n')"
+    if [ -n "$from_container" ]; then
+      printf '%s' "$from_container"
+      return
+    fi
+  fi
+
+  printf '%s' 'whsec_placeholder_not_a_real_secret'
+}
+
+WEBHOOK_SECRET="$(resolve_webhook_secret)"
 
 bold=$'\033[1m'; green=$'\033[32m'; red=$'\033[31m'; dim=$'\033[2m'; reset=$'\033[0m'
 
