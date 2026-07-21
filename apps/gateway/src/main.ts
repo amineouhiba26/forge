@@ -14,10 +14,12 @@ const tracing = startTracing('gateway');
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import helmet from 'helmet';
 
 import { Logger } from 'nestjs-pino';
 
 import { AppModule } from './app.module';
+import { SWAGGER_PATH, setupSwagger } from './common/swagger';
 
 async function bootstrap(): Promise<void> {
   // `rawBody: true` keeps the untouched request bytes on `req.rawBody`
@@ -34,6 +36,17 @@ async function bootstrap(): Promise<void> {
 
   app.useLogger(app.get(Logger));
 
+  // Security headers on every response: HSTS, X-Content-Type-Options,
+  // X-Frame-Options and the rest of helmet's defaults.
+  //
+  // CSP is disabled deliberately. Content-Security-Policy exists to constrain
+  // what a *browser* may load for an HTML page; the gateway serves a JSON API
+  // whose only HTML is the dev Swagger UI at /docs. There is no page whose
+  // script/style origins CSP would meaningfully restrict, and helmet's default
+  // CSP breaks Swagger UI's inline assets. Turning it off removes a header
+  // that protects nothing here rather than one that does.
+  app.use(helmet({ contentSecurityPolicy: false }));
+
   app.useGlobalPipes(
     new ValidationPipe({
       // Strip unknown properties and reject payloads that carry them, so a
@@ -44,9 +57,17 @@ async function bootstrap(): Promise<void> {
     }),
   );
 
+  const documented = setupSwagger(app);
+
   const port = app.get(ConfigService).getOrThrow<number>('PORT');
   await app.listen(port);
   app.get(Logger).log(`gateway listening on http://localhost:${port}`);
+
+  if (documented) {
+    app
+      .get(Logger)
+      .log(`API documentation on http://localhost:${port}/${SWAGGER_PATH}`);
+  }
 
   // Flush pending spans on shutdown, or the last seconds of traces before
   // every deploy are lost.

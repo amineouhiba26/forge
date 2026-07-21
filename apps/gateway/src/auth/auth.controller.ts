@@ -5,8 +5,10 @@ import {
   HttpStatus,
   Inject,
   Post,
+  UseGuards,
 } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
+import { ThrottlerGuard } from '@nestjs/throttler';
 
 import {
   AuthResultDto,
@@ -25,7 +27,15 @@ import { Public } from './public.decorator';
 /**
  * Every route here is `@Public()`: these are the endpoints used to *obtain* a
  * token, so requiring one would be circular.
+ *
+ * `ThrottlerGuard` is applied here and nowhere else. These endpoints are the
+ * brute-force surface — an attacker guessing passwords hits `/auth/login`, not
+ * `/invoices`. Rate-limiting the whole API would also throttle a tenant's
+ * legitimate bulk use of its own data, which is a different thing from abuse.
+ * Keyed by IP by default; behind a load balancer the gateway needs `trust
+ * proxy` set so the real client IP is used rather than the balancer's.
  */
+@UseGuards(ThrottlerGuard)
 @Controller('auth')
 export class AuthController {
   constructor(

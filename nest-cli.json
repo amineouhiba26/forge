@@ -16,7 +16,10 @@
       "entryFile": "main",
       "sourceRoot": "apps/gateway/src",
       "compilerOptions": {
-        "tsConfigPath": "apps/gateway/tsconfig.app.json"
+        "tsConfigPath": "apps/gateway/tsconfig.app.json",
+        "plugins": [
+          "@nestjs/swagger"
+        ]
       }
     },
     "tenants-service": {

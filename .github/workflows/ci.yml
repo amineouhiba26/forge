@@ -31,6 +31,11 @@ jobs:
       JWT_REFRESH_SECRET: ci-refresh-secret-at-least-32-characters-long
       JWT_ACCESS_TTL: 15m
       JWT_REFRESH_TTL: 7d
+      # Loosened so the functional e2e suites, which sign up and log in many
+      # times, are not throttled. security.e2e-spec.ts sets a low limit of its
+      # own to prove the 429.
+      AUTH_THROTTLE_TTL_MS: 60000
+      AUTH_THROTTLE_LIMIT: 100000
       # CI-only placeholders. No Stripe account is contacted: the e2e suite
       # stubs intent creation and signs its own webhook payloads with the
       # secret below, so verification is exercised for real against it.
@@ -79,3 +84,44 @@ jobs:
 
       - name: End-to-end tests
         run: npm run test:e2e
+
+  images:
+    name: Build service images
+    runs-on: ubuntu-latest
+    # Independent of the test job: a Dockerfile can break without a single test
+    # failing, and a broken image is only discovered at deploy time otherwise.
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Validate the compose file
+        # Resolves anchors, substitutions and service references. Catches a
+        # broken stack definition without waiting for someone to run it.
+        run: docker compose config --quiet
+
+      - name: Build every service image
+        # Built but not pushed — this proves the Dockerfiles compile and the
+        # runtime stage resolves, which is what breaks in practice. Publishing
+        # to a registry needs credentials and a versioning scheme, and belongs
+        # with a real deployment pipeline rather than with CI on a branch.
+        run: |
+          set -euo pipefail
+          for svc in gateway tenants-service contracts-service billing-service worker-service; do
+            echo "::group::$svc"
+            docker build -f "apps/$svc/Dockerfile" -t "forge-$svc:ci" .
+            echo "::endgroup::"
+          done
+
+      - name: Confirm no .env was baked into an image
+        # The reason .dockerignore exists: ConfigModule reads the .env *file* in
+        # preference to the real environment, so a stray one in an image would
+        # silently override injected secrets. Cheap to assert, catastrophic to
+        # miss.
+        run: |
+          set -euo pipefail
+          if docker run --rm --entrypoint sh forge-gateway:ci -c '[ -f /app/.env ]'; then
+            echo "::error::.env is present inside the gateway image"
+            exit 1
+          fi
+          echo "No .env in the image."

@@ -98,6 +98,17 @@ export const gatewayEnvSchema = Joi.object({
   // business holding the refresh secret.
   ...accessTokenSchema,
   PORT: Joi.number().port().default(3000),
+  // Rate limiting for the auth endpoints. Configurable rather than hardcoded
+  // for two reasons: a horizontally-scaled deployment tunes it to its own
+  // traffic, and the e2e suites loosen it so functional tests are not fighting
+  // a brute-force guard. The default is the production-sensible value — 10
+  // auth attempts per minute per IP.
+  AUTH_THROTTLE_TTL_MS: Joi.number().integer().min(1000).default(60_000),
+  AUTH_THROTTLE_LIMIT: Joi.number().integer().min(1).default(10),
+  // Serving the API documentation is a deployment decision: helpful to a
+  // reviewer, a map of the attack surface to anyone else. Defaults on, because
+  // an undocumented API is the more common failure.
+  SWAGGER_ENABLED: Joi.boolean().default(true),
 });
 
 export const tenantsServiceEnvSchema = Joi.object({
