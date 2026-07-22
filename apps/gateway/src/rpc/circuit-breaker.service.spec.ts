@@ -90,10 +90,20 @@ describe('CircuitBreakerService', () => {
       expect(breakers.stateOf('billing-service')).toBe('closed');
     });
 
-    it('still opens on 5xx, which is a real downstream failure', async () => {
+    it('still opens on 500, which is the service saying it is broken', async () => {
       await failNTimes('billing-service', 6, () => clientError(500));
 
       expect(breakers.stateOf('billing-service')).toBe('open');
+    });
+
+    it('ignores 502 — the service is alive, its own upstream failed', async () => {
+      // billing returns 502 when Stripe rejects us. Counting it would open
+      // billing's circuit and take invoice listing and reading offline for
+      // every tenant because of a payment-provider problem on one route,
+      // escalating a localised fault into a service-wide outage.
+      await failNTimes('billing-service', 10, () => clientError(502));
+
+      expect(breakers.stateOf('billing-service')).toBe('closed');
     });
 
     it('does not open below the volume threshold', async () => {

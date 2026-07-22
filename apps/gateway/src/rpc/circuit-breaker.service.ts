@@ -109,8 +109,9 @@ export class CircuitBreakerService {
         // "That invoice does not exist" and "you may not do that" are the
         // service working correctly, and counting them would take a healthy
         // service offline for being told about bad input — an easy way to
-        // turn a client bug into an outage.
-        errorFilter: (error: unknown) => isClientError(error),
+        // turn a client bug into an outage. The same reasoning extends to a
+        // downstream's mapped 5xx: it answered, so it is reachable.
+        errorFilter: (error: unknown) => isNotAServiceFailure(error),
       },
     );
 
@@ -135,12 +136,31 @@ export class CircuitBreakerService {
   }
 }
 
-/** True for downstream 4xx responses, which must not count against the circuit. */
-function isClientError(error: unknown): boolean {
+/**
+ * True for downstream responses that must **not** count against the circuit.
+ *
+ * Two cases, for different reasons:
+ *
+ * - **4xx** — the service worked correctly and rejected bad input. Counting
+ *   these would take a healthy service offline for being told about a client
+ *   bug.
+ * - **502** — the service is alive and reporting that something *it* depends
+ *   on failed. That is precisely what 502 means, and it is not evidence the
+ *   service is unreachable. Billing returns it when Stripe rejects us; letting
+ *   that open billing's circuit would take invoice listing and reading offline
+ *   for every tenant because of a payment-provider problem on one route —
+ *   escalating a localised fault into a service-wide outage.
+ *
+ * A downstream 500 still counts: that is the service saying it is itself
+ * broken. So does an unanswered call, which carries no status at all.
+ */
+function isNotAServiceFailure(error: unknown): boolean {
   if (typeof error !== 'object' || error === null) return false;
 
   const status = (error as { status?: unknown }).status;
-  return typeof status === 'number' && status >= 400 && status < 500;
+  if (typeof status !== 'number') return false;
+
+  return (status >= 400 && status < 500) || status === 502;
 }
 
 function isBreakerOpen(error: unknown): boolean {
