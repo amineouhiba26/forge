@@ -36,8 +36,12 @@ const baseSchema = {
 
   // Observability, shared by all five services so the log shape and trace
   // configuration cannot drift between them.
+  // `silent` is pino's own level for "emit nothing". The e2e suites default to
+  // it so a passing run shows test results rather than several hundred request
+  // log lines; `LOG_LEVEL=info npm run test:e2e` turns them back on when
+  // something needs debugging.
   LOG_LEVEL: Joi.string()
-    .valid('fatal', 'error', 'warn', 'info', 'debug', 'trace')
+    .valid('fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent')
     .default('info'),
   // Defaults to off. A collector that is not running makes every service
   // retry exports on a timer, which is worse than no tracing at all.

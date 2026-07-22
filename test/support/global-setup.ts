@@ -24,6 +24,11 @@ export default async function globalSetup(): Promise<void> {
   // via dotenv. Set here so no suite has to know where the database came from.
   process.env.DATABASE_URL = infrastructure.appUrl;
   process.env.DATABASE_MIGRATION_URL = infrastructure.migrationUrl;
+  // Quiet by default: the services log a line per request, which buries the
+  // test results in several hundred lines of noise. Respects an explicit
+  // setting, so `LOG_LEVEL=info npm run test:e2e` restores them for debugging.
+  process.env.LOG_LEVEL = process.env.LOG_LEVEL ?? 'silent';
+
   process.env.REDIS_HOST = infrastructure.redis.getHost();
   process.env.REDIS_PORT = String(infrastructure.redis.getPort());
 
